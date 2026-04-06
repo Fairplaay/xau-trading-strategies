@@ -308,10 +308,10 @@ class TradingBot:
                     print(f"⏸️ [{datetime.now().strftime('%H:%M:%S')}] Bloqueado por noticias ({news_status['level']}): {news_status.get('reason', '')}")
                     # Calcular espera para próximo ciclo (5 seg antes del minuto)
                     # Esperar hasta segundo 55
-                wait = 55 - datetime.now().second
-                if wait <= 0:
-                    wait += 60
-                time.sleep(wait)
+                    wait = 55 - datetime.now().second
+                    if wait <= 0:
+                        wait += 60
+                    time.sleep(wait)
                     continue
                 
                 # 2. Obtener datos del mercado
@@ -319,10 +319,10 @@ class TradingBot:
                 if not market_data:
                     print(f"⚠️ [{datetime.now().strftime('%H:%M:%S')}] No se pudo obtener datos")
                     # Esperar hasta segundo 55
-                wait = 55 - datetime.now().second
-                if wait <= 0:
-                    wait += 60
-                time.sleep(wait)
+                    wait = 55 - datetime.now().second
+                    if wait <= 0:
+                        wait += 60
+                    time.sleep(wait)
                     continue
                 
                 # Agregar estado de noticias al market_data
