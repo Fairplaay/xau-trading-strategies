@@ -1,6 +1,14 @@
 # AI Trading Bot - Dependencias
 
+# OpenRouter (IA)
 openrouter>=0.1.0
-metaTrader5>=5.0.45
+
+# Cliente HTTP (para EA Connector)
 requests>=2.31.0
+
+# Cargar variables de entorno
 python-dotenv>=1.0.0
+
+# Opcional: BeautifulSoup para parsing HTML (ff_calendar.py)
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
