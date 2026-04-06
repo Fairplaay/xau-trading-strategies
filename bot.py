@@ -120,6 +120,15 @@ class TradingBot:
         
         return True
     
+    def cleanup(self):
+        """Limpieza al cerrar el bot."""
+        print("🔄 Cerrando conexiones...")
+        if hasattr(self, 'mt5') and self.mt5:
+            self.mt5.disconnect()
+        if hasattr(self, 'news'):
+            print("   ✓ News calendar cerrado")
+        print("   ✓ Limpieza completada")
+    
     def get_market_data(self) -> dict:
         """Obtiene datos actuales del mercado."""
         symbol = self.config.SYMBOL
@@ -256,12 +265,19 @@ class TradingBot:
         print(f"\n🔄 Iniciando loop principal (cada {self.config.CHECK_INTERVAL}s)")
         print("Presiona Ctrl+C para detener\n")
         
-        # Handler para Ctrl+C
-        def signal_handler(sig, frame):
-            print("\n🛑 Deteniendo bot...")
-            self.running = False
+        # Guardar referencia al bot para el handler
+        bot_instance = self
         
-        signal.signal(signal.SIGINT, signal_handler)
+        # Handler para Ctrl+C - definido fuera del loop
+        def handle_interrupt(signum, frame):
+            print("\n\n🛑 Deteniendo bot...")
+            print("   Cerrando conexiones...")
+            bot_instance.running = False
+            bot_instance.cleanup()
+            print("✅ Bot detenido correctamente")
+            sys.exit(0)
+        
+        signal.signal(signal.SIGINT, handle_interrupt)
         
         # Loop principal
         while self.running:
