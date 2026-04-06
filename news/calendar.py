@@ -42,22 +42,30 @@ class NewsCalendar:
         """Carga el calendario de la semana desde ForexFactory."""
         import time
         import os
+        from datetime import datetime
         
-        # Intentar hasta 3 veces con delay
+        # Verificar cache local (archivo json en directorio del proyecto)
+        cache_file = os.path.join(os.path.dirname(__file__), "..", "cache", "news_cache.json")
+        
+        # Si existe cache de hoy, usarlo
+        if os.path.exists(cache_file):
+            cache_date = datetime.fromtimestamp(os.path.getmtime(cache_file)).strftime("%Y-%m-%d")
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            if cache_date == today:
+                try:
+                    with open(cache_file, "r") as f:
+                        data = json.load(f)
+                        self.events = self._parse_events(data)
+                        self._loaded = True
+                        print(f"📰 Calendario cargado desde cache (hoy): {len(self.events)} eventos")
+                        return True
+                except:
+                    pass  # Si falla, descargar de nuevo
+        
+        # Descargar nuevo
         for attempt in range(3):
             try:
-                # Verificar cache local (archivo json en directorio del proyecto)
-                cache_file = os.path.join(os.path.dirname(__file__), "..", "cache", "news_cache.json")
-                if os.path.exists(cache_file):
-                    age = time.time() - os.path.getmtime(cache_file)
-                    if age < 3600:  # Cache válido por 1 hora
-                        with open(cache_file, "r") as f:
-                            data = json.load(f)
-                            self.events = self._parse_events(data)
-                            self._loaded = True
-                            print(f"📰 Calendario cargado desde cache: {len(self.events)} eventos")
-                            return True
-                
                 response = requests.get(self.url, timeout=15)
                 response.raise_for_status()
                 data = response.json()
