@@ -1,36 +1,95 @@
-# XAU/USD Scalping Strategies
+# 🤖 AI Trading Bot - XAU/USD
 
-Colección de estrategias de scalping para XAU/USD desarrolladas para trading automatizado y manual.
+Bot de trading automatizado con IA para XAU/USD, integrado con MetaTrader 5 y OpenRouter.
 
-## Estructura del Repositorio
+## ⚡️ Requisitos
+
+- Python 3.9+
+- MetaTrader 5 (Windows) - debe estar abierto
+- Cuenta en [OpenRouter.ai](https://openrouter.ai) (API key gratuita)
+
+## 📦 Instalación
+
+```bash
+# Clonar y entrar al directorio
+cd xau-trading-strategies/ai-bot
+
+# Crear entorno virtual (recomendado)
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# venv\Scripts\activate   # Windows
+
+# Instalar dependencias
+pip install -r requirements.txt
+```
+
+## ⚙️ Configuración
+
+1. Copia el archivo de ejemplo:
+```bash
+cp .env.example .env
+```
+
+2. Edita `.env` y agrega tu API key de OpenRouter:
+```bash
+OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxx
+```
+
+## 🚀 Uso
+
+### Ver estrategias disponibles:
+```bash
+python bot.py --list-strategies
+```
+
+### Ejecutar con una estrategia:
+```bash
+# Estrategia EMA/RSI/ATR (default)
+python bot.py --strategy EMARSI
+
+# Estrategia Price Structure
+python bot.py --strategy STRUCTURE
+```
+
+### Con MT5 automático (agrega a .env):
+```bash
+MT5_ACCOUNT=12345678
+MT5_PASSWORD=tu_password
+MT5_SERVER=TuBroker-Server
+```
+
+## 🧠 Modelos Gratuitos
+
+OpenRouter ofrece modelos gratuitos. El default es:
+
+| Modelo | ID |
+|--------|-----|
+| Llama 3.2 3B | `meta-llama/llama-3.2-3b-instruct:free` |
+
+Otros modelos gratuitos disponibles:
+- `deepseek/deepseek-r1:free`
+- `qwen/qwen-2.5-7b-instruct:free`
+
+## 📁 Estructura
 
 ```
-xau-trading-strategies/
-├── docs/
-│   ├── estrategia-a-mt5-fastapi.md    # EMA/RSI/ATR strategy
-│   └── estrategia-b-tradingview.md     # Price structure strategy
-├── prompts/
-│   ├── xau-scalping-prompt.md         # Original prompt (A)
-│   └── xau-tv-scalping-prompt.md      # TradingView prompt (B)
-├── scripts/
-│   └── (scripts de trading)
-└── README.md
+ai-bot/
+├── bot.py                 # Loop principal
+├── config.py              # Configuración (ENV)
+├── requirements.txt       # Dependencias
+├── .env.example          # Template de variables
+├── strategies/            # Estrategias de trading
+│   ├── base.py           # Clase base
+│   ├── ema_rsi_atr.py    # Estrategia A
+│   └── price_structure.py # Estrategia B
+├── news/                  # Calendario de noticias
+│   └── calendar.py       # ForexFactory
+├── ai/                   # Cliente IA
+│   └── openrouter_client.py
+└── mt5/                  # Conector MT5
+    └── connector.py
 ```
 
-## Estrategias Disponibles
+## ⚠️ Disclaimer
 
-### Estrategia A: MT5 + FastAPI (EMA/RSI/ATR)
-- **Filosofía:** Indicadores técnicos clásicos
-- **Indicadores:** EMA50, EMA200, RSI14, ATR14
-- **Timeframe:** M1 (1 minuto)
-- **Ventana:** 08:00-16:00 VET
-
-### Estrategia B: TradingView (Estructura de Precio)
-- **Filosofía:** Estructura primero, indicadores después
-- **Indicadores:** Stoch, CCI, RSI (contexto)
-- **Timeframe:** M5 (5 minutos)
-- **Gates rígidos:** ATR>8, noticias, 21:00-22:00 UTC = skip
-
-## Licencia
-
-Para uso personal y educativo.
+Este bot es para fines educativos. Sempre verifica las señales antes de operar. El autor no se hace responsable de pérdidas financieras.
