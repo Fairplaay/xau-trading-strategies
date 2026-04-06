@@ -100,18 +100,19 @@ Responde SOLO con una palabra: BUY, SELL o NADA"""
                     messages=[
                         {
                             "role": "system",
-                            "content": """Responde EXACTAMENTE con una palabra: BUY, SELL o NADA. 
-No escribas nada más. Solo la palabra."""
+                            "content": "Eres un asistente de trading. Tu única tarea es dar señales para XAUUSD. "
+                                      "Responde EXACTAMENTE con una palabra: BUY, SELL o NADA. "
+                                      "Sin explicaciones, sin saludos, sin contexto."
                         },
                         {
                             "role": "user",
-                            "content": prompt
+                            "content": prompt + "\n\nResponde SOLO con: BUY, SELL o NADA"
                         }
                     ],
                     options={
                         "temperature": 0.0,
-                        "num_predict": 3,
-                        "stop": ["\n", " ", "."]
+                        "num_predict": 5,
+                        "repeat_penalty": 1.5
                     }
                 )
                 
