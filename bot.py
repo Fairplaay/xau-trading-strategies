@@ -307,14 +307,14 @@ class TradingBot:
                 if news_status["blocked"]:
                     print(f"⏸️ [{datetime.now().strftime('%H:%M:%S')}] Bloqueado por noticias ({news_status['level']}): {news_status.get('reason', '')}")
                     # Calcular espera para próximo ciclo (5 seg antes del minuto)
-                    time.sleep(max(1, 55 - datetime.now().second))
+                    time.sleep(55)
                     continue
                 
                 # 2. Obtener datos del mercado
                 market_data = self.get_market_data()
                 if not market_data:
                     print(f"⚠️ [{datetime.now().strftime('%H:%M:%S')}] No se pudo obtener datos")
-                    time.sleep(max(1, 55 - datetime.now().second))
+                    time.sleep(55)
                     continue
                 
                 # Agregar estado de noticias al market_data
@@ -370,11 +370,11 @@ class TradingBot:
                     print(f"⏳ [{datetime.now().strftime('%H:%M:%S')}] Sin señal - {market_data.get('trend', 'N/A')} | RSI: {market_data.get('rsi', 0):.1f}")
                 
                 # Esperar hasta 5 segundos antes del próximo minuto
-                time.sleep(max(1, 55 - datetime.now().second))
+                time.sleep(55)
                 
             except Exception as e:
                 print(f"❌ Error en loop: {e}")
-                time.sleep(max(1, 55 - datetime.now().second))
+                time.sleep(55)
         
         # Cleanup
         print("\n🔌 Cerrando conexiones...")

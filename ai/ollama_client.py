@@ -107,9 +107,7 @@ class OllamaClient:
             return False
     
     def analyze(self, market_data: Dict[str, Any], strategy_rules: str) -> str:
-        """
-        Analiza datos de mercado y decide señal.
-        """
+        """Analiza datos de mercado y decide señal."""
         if not self._connected:
             return "NADA"
         
@@ -134,7 +132,6 @@ class OllamaClient:
                 
                 print(f"   [IA] Response: {content[:50]}...")
                 
-                # Detectar palabras clave
                 buy_words = ["BUY", "LONG", "CALL"]
                 sell_words = ["SELL", "SHORT", "PUT"]
                 
