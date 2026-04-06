@@ -112,8 +112,9 @@ Responde SOLO con una palabra: BUY, SELL o NADA"""
                         }
                     ],
                     options={
-                        "temperature": 0.3,
-                        "num_predict": 50
+                        "temperature": 0.1,
+                        "num_predict": 5,
+                        "repeat_penalty": 1.2
                     }
                 )
                 
