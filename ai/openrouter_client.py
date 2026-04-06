@@ -103,6 +103,25 @@ class AITradingClient:
                 
         except Exception as e:
             print(f"❌ Error en análisis IA: {e}")
+            # Retry una vez
+            try:
+                print("🔄 Reintentando...")
+                response = self.client.chat.send(
+                    messages=[
+                        {"role": "system", "content": self.initial_context},
+                        {"role": "user", "content": prompt}
+                    ],
+                    model=self.model,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens
+                )
+                decision = response.choices[0].message.content.strip().upper()
+                if "BUY" in decision:
+                    return "BUY"
+                elif "SELL" in decision:
+                    return "SELL"
+            except Exception as e2:
+                print(f"❌ Retry también falló: {e2}")
             return "NADA"
     
     def _build_prompt(self, market_data: Dict, strategy_rules: str) -> str:
