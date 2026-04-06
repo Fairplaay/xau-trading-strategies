@@ -23,49 +23,54 @@ print("🔌 Conectando a OpenRouter...")
 print(f"   Modelo: {MODEL}")
 print(f"   API Key: {API_KEY[:15]}...")
 
-try:
-    from openrouter import OpenRouter
-    
-    with OpenRouter(api_key=API_KEY) as client:
-        print("✅ Cliente creado")
-        
-        print("📤 Enviando mensaje de prueba...")
-        
-        response = client.chat.send(
-            messages=[
-                {"role": "user", "content": "Responde solo con 'BUY' o 'SELL'"}
-            ],
-            model=MODEL,
-            max_tokens=20
-        )
-        
-        # Leer respuesta
-        text = ""
-        for chunk in response:
-            if hasattr(chunk, 'choices') and chunk.choices:
-                if chunk.choices[0].delta.content:
-                    text += chunk.choices[0].delta.content
-        
-        print("✅ Respuesta recibida!")
-        print(f"📥 Respuesta: {text}")
-        
-except Exception as e:
-    print(f"\n❌ Error: {e}")
-    
-    # Mensajes específicos por tipo de error
-    err_str = str(e)
-    if "TooManyRequests" in err_str or "rate_limit" in err_str:
-        print("\n⚠️ El modelo está saturado o alcanzaste el límite.")
-        print("   Prueba en .env con otro modelo:")
-        print("   MODEL_NAME=google/gemma-2-9b-it:free")
-    elif "Provider returned error" in err_str:
-        print("\n⚠️ El proveedor del modelo tiene problemas.")
-        print("   Prueba con otro modelo gratuito.")
-    elif "api_key" in err_str.lower():
-        print("\n⚠️ Revisa tu API key en .env")
-    else:
-        print("\n   Revisa tu cuenta en https://openrouter.ai/credits")
-    
-    sys.exit(1)
+MAX_RETRIES = 3
 
-print("\n✅ Test completado - IA funcionando!")
+for attempt in range(MAX_RETRIES):
+    print(f"\n📤 Intento {attempt + 1}/{MAX_RETRIES}...")
+    
+    try:
+        from openrouter import OpenRouter
+        
+        with OpenRouter(api_key=API_KEY) as client:
+            print("✅ Cliente creado")
+            
+            response = client.chat.send(
+                messages=[
+                    {"role": "user", "content": "Responde solo con una palabra: BUY o SELL"}
+                ],
+                model=MODEL,
+                max_tokens=10,
+                temperature=0.1
+            )
+            
+            # Leer respuesta
+            text = ""
+            for chunk in response:
+                if hasattr(chunk, 'choices') and chunk.choices:
+                    if chunk.choices[0].delta.content:
+                        text += chunk.choices[0].delta.content
+            
+            if text.strip():
+                print(f"✅ Respuesta: {text.strip()}")
+                print("\n✅ IA funcionando!")
+                sys.exit(0)
+            else:
+                print("⚠️ Respuesta vacía")
+                
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        err_str = str(e)
+        if "TooManyRequests" in err_str or "rate_limit" in err_str:
+            print("   Modelo saturado, esperando 2s...")
+            import time
+            time.sleep(2)
+        else:
+            print(f"   Error: {e}")
+    
+    import time
+    time.sleep(1)
+
+print("\n❌ Todos los intentos fallaron")
+print("   Prueba cambiar el modelo en .env:")
+print("   MODEL_NAME=google/gemma-2-9b-it:free")
+sys.exit(1)
