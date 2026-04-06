@@ -91,7 +91,17 @@ class AITradingClient:
                 max_tokens=self.max_tokens
             )
             
-            decision = response.choices[0].message.content.strip().upper()
+            # Verificar que la respuesta tenga contenido
+            if not response or not response.choices or not response.choices[0].message:
+                print("⚠️ Respuesta vacía del modelo")
+                return "NADA"
+            
+            content = response.choices[0].message.content
+            if not content:
+                print("⚠️ Contenido vacío")
+                return "NADA"
+            
+            decision = content.strip().upper()
             
             # Normalizar respuesta
             if "BUY" in decision:
@@ -122,6 +132,10 @@ class AITradingClient:
                     return "SELL"
             except Exception as e2:
                 print(f"❌ Retry también falló: {e2}")
+                # Verificar si response es None
+                if hasattr(e2, '__traceback__'):
+                    import traceback
+                    print(f"   Trace: {traceback.format_exc()}")
             return "NADA"
     
     def _build_prompt(self, market_data: Dict, strategy_rules: str) -> str:
