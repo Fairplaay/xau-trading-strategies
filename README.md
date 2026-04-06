@@ -5,14 +5,15 @@ Bot de trading automatizado con IA para XAU/USD, integrado con MetaTrader 5 y Op
 ## ⚡️ Requisitos
 
 - Python 3.9+
-- MetaTrader 5 (Windows) - debe estar abierto
+- **Linux:** Wine + mt5linux (ver abajo)
+- **Windows:** MetaTrader 5 abierto
 - Cuenta en [OpenRouter.ai](https://openrouter.ai) (API key gratuita)
 
 ## 📦 Instalación
 
 ```bash
-# Clonar la rama feature/ai-bot
-git checkout origin/feature/ai-bot
+# Clonar la rama feature/ai-bot-mt5linux
+git checkout origin/feature/ai-bot-mt5linux
 
 # Crear entorno virtual (recomendado)
 python -m venv venv
@@ -22,6 +23,32 @@ source venv/bin/activate  # Linux/Mac
 # Instalar dependencias
 pip install -r requirements.txt
 ```
+
+## 🐧 Linux (mt5linux)
+
+Para correr en Linux, necesitas Wine + mt5linux:
+
+```bash
+# 1. Instalar Wine
+sudo apt install wine
+
+# 2. Instalar Python for Windows en Wine
+# Descarga Python desde python.org/downloads/windows/
+
+# 3. En el Python de Wine:
+wine python -m pip install MetaTrader5
+
+# 4. En tu Python Linux:
+pip install mt5linux
+
+# 5. Iniciar el servidor mt5linux (en el Python de Wine):
+wine python -m mt5linux
+
+# 6. Luego ejecutar el bot
+python bot.py --strategy EMARSI
+```
+
+**Nota:** MT5 debe estar abierto y el servidor mt5linux debe estar corriendo.
 
 ## ⚙️ Configuración
 

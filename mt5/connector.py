@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-Conector MetaTrader5.
-Maneja conexión y envío de órdenes.
+Conector MetaTrader5 para Linux.
+Usa mt5linux para conectar via Wine/RPyC.
 """
 
-import MetaTrader5 as mt5
+try:
+    from mt5linux import MetaTrader5
+except ImportError:
+    # Fallback para Windows (desarrollo local)
+    import MetaTrader5 as _mt5
+    MetaTrader5 = _mt5
+
 from typing import Optional, Dict, Any
-import sys
 
 
 class MT5Connector:
@@ -18,20 +23,20 @@ class MT5Connector:
     
     def connect(self, login: int = 0, password: str = "", server: str = "") -> bool:
         """Conecta a MT5."""
-        if not mt5.initialize():
-            print(f"❌ Error inicializando MT5: {mt5.last_error()}")
+        if not MetaTrader5.initialize():
+            print(f"❌ Error inicializando MT5: {MetaTrader5.last_error()}")
             return False
         
         # Si hay login proporcionado, hacer login
         if login > 0 and password and server:
-            authorized = mt5.login(login=login, password=password, server=server)
+            authorized = MetaTrader5.login(login=login, password=password, server=server)
             if not authorized:
-                print(f"❌ Error login MT5: {mt5.last_error()}")
-                mt5.shutdown()
+                print(f"❌ Error login MT5: {MetaTrader5.last_error()}")
+                MetaTrader5.shutdown()
                 return False
         
         self.connected = True
-        self.account_info = mt5.account_info()
+        self.account_info = MetaTrader5.account_info()
         
         print(f"✅ Conectado a MT5")
         print(f"   Cuenta: {self.account_info.login}")
@@ -42,7 +47,7 @@ class MT5Connector:
     def disconnect(self):
         """Desconecta de MT5."""
         if self.connected:
-            mt5.shutdown()
+            MetaTrader5.shutdown()
             self.connected = False
             print("🔌 Desconectado de MT5")
     
@@ -51,7 +56,7 @@ class MT5Connector:
         if not self.connected:
             return None
         
-        info = mt5.symbol_info(symbol)
+        info = MetaTrader5.symbol_info(symbol)
         if info is None:
             return None
         
@@ -70,7 +75,7 @@ class MT5Connector:
         if not self.connected:
             return None
         
-        tick = mt5.symbol_info_tick(symbol)
+        tick = MetaTrader5.symbol_info_tick(symbol)
         if tick is None:
             return None
         
@@ -87,16 +92,16 @@ class MT5Connector:
         
         # Mapear timeframe
         tf_map = {
-            "M1": mt5.TIMEFRAME_M1,
-            "M5": mt5.TIMEFRAME_M5,
-            "M15": mt5.TIMEFRAME_M15,
-            "H1": mt5.TIMEFRAME_H1,
-            "H4": mt5.TIMEFRAME_H4,
-            "D1": mt5.TIMEFRAME_D1
+            "M1": MetaTrader5.TIMEFRAME_M1,
+            "M5": MetaTrader5.TIMEFRAME_M5,
+            "M15": MetaTrader5.TIMEFRAME_M15,
+            "H1": MetaTrader5.TIMEFRAME_H1,
+            "H4": MetaTrader5.TIMEFRAME_H4,
+            "D1": MetaTrader5.TIMEFRAME_D1
         }
         
-        tf = tf_map.get(timeframe, mt5.TIMEFRAME_M1)
-        rates = mt5.copy_rates_from_pos(symbol, tf, 0, count)
+        tf = tf_map.get(timeframe, MetaTrader5.TIMEFRAME_M1)
+        rates = MetaTrader5.copy_rates_from_pos(symbol, tf, 0, count)
         
         return rates
     
@@ -135,14 +140,14 @@ class MT5Connector:
         # Determinar precio y tipo de orden
         if order_type.upper() == "BUY":
             price = tick["ask"]
-            mt5_type = mt5.ORDER_TYPE_BUY
+            mt5_type = MetaTrader5.ORDER_TYPE_BUY
         else:
             price = tick["bid"]
-            mt5_type = mt5.ORDER_TYPE_SELL
+            mt5_type = MetaTrader5.ORDER_TYPE_SELL
         
         # Preparar request
         request = {
-            "action": mt5.TRADE_ACTION_DEAL,
+            "action": MetaTrader5.TRADE_ACTION_DEAL,
             "symbol": symbol,
             "volume": volume,
             "type": mt5_type,
@@ -150,18 +155,18 @@ class MT5Connector:
             "deviation": deviation,
             "magic": magic,
             "comment": comment,
-            "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC
+            "type_time": MetaTrader5.ORDER_TIME_GTC,
+            "type_filling": MetaTrader5.ORDER_FILLING_IOC
         }
         
         # Enviar orden
-        result = mt5.order_send(request)
+        result = MetaTrader5.order_send(request)
         
         if result is None:
-            print(f"❌ Error enviando orden: {mt5.last_error()}")
+            print(f"❌ Error enviando orden: {MetaTrader5.last_error()}")
             return None
         
-        if result.retcode != mt5.TRADE_RETCODE_DONE:
+        if result.retcode != MetaTrader5.TRADE_RETCODE_DONE:
             print(f"❌ Orden fallida: {result.comment}")
             return {
                 "success": False,
@@ -181,38 +186,38 @@ class MT5Connector:
         """Obtiene posiciones abiertas."""
         if not self.connected:
             return []
-        return mt5.positions_get()
+        return MetaTrader5.positions_get()
     
     def close_position(self, ticket: int) -> bool:
         """Cierra una posición por ticket."""
         if not self.connected:
             return False
         
-        position = mt5.position_get(ticket=ticket)
+        position = MetaTrader5.position_get(ticket=ticket)
         if position is None:
             return False
         
         # Determinar tipo de orden opuesto
-        if position.type == mt5.POSITION_TYPE_BUY:
-            order_type = mt5.ORDER_TYPE_SELL
+        if position.type == MetaTrader5.POSITION_TYPE_BUY:
+            order_type = MetaTrader5.ORDER_TYPE_SELL
         else:
-            order_type = mt5.ORDER_TYPE_BUY
+            order_type = MetaTrader5.ORDER_TYPE_BUY
         
         request = {
-            "action": mt5.TRADE_ACTION_DEAL,
+            "action": MetaTrader5.TRADE_ACTION_DEAL,
             "symbol": position.symbol,
             "volume": position.volume,
             "type": order_type,
-            "price": mt5.symbol_info_tick(position.symbol).bid if order_type == mt5.ORDER_TYPE_SELL 
-                   else mt5.symbol_info_tick(position.symbol).ask,
+            "price": MetaTrader5.symbol_info_tick(position.symbol).bid if order_type == MetaTrader5.ORDER_TYPE_SELL 
+                   else MetaTrader5.symbol_info_tick(position.symbol).ask,
             "deviation": 20,
             "magic": position.magic,
             "comment": f"Close #{ticket}",
             "position": ticket
         }
         
-        result = mt5.order_send(request)
-        return result.retcode == mt5.TRADE_RETCODE_DONE
+        result = MetaTrader5.order_send(request)
+        return result.retcode == MetaTrader5.TRADE_RETCODE_DONE
     
     def __enter__(self):
         """Context manager entry."""

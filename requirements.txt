@@ -1,6 +1,6 @@
 # AI Trading Bot - Dependencias
 
 openrouter>=0.1.0
-metaTrader5>=5.0.45
+mt5linux>=1.0.0
 requests>=2.31.0
 python-dotenv>=1.0.0
