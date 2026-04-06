@@ -7,9 +7,8 @@ Simple: envía un mensaje y recibe respuesta
 
 import os
 import sys
-
-# Cargar variable de entorno
 from dotenv import load_dotenv
+
 load_dotenv()
 
 API_KEY = os.getenv("OPENROUTER_API_KEY", "")
@@ -23,27 +22,33 @@ print("🔌 Conectando a OpenRouter...")
 try:
     from openrouter import OpenRouter
     
-    client = OpenRouter(api_key=API_KEY)
-    
-    print("✅ Cliente creado")
-    
-    # Enviar mensaje simple
-    print("📤 Enviando mensaje de prueba...")
-    
-    response = client.chat.send(
-        messages=[
-            {"role": "user", "content": "Responde solo con 'BUY' o 'SELL'"}
-        ],
-        model="meta-llama/llama-3.2-3b-instruct:free",
-        temperature=0.1,
-        max_tokens=20
-    )
-    
-    print("✅ Respuesta recibida!")
-    print(f"📥 Respuesta: {response.choices[0].message.content}")
-    
+    with OpenRouter(api_key=API_KEY) as client:
+        print("✅ Cliente creado")
+        
+        print("📤 Enviando mensaje de prueba...")
+        
+        response = client.chat.send(
+            messages=[
+                {"role": "user", "content": "Responde solo con 'BUY' o 'SELL'"}
+            ],
+            model="meta-llama/llama-3.2-3b-instruct:free",
+            max_tokens=20
+        )
+        
+        # Leer respuesta
+        text = ""
+        for chunk in response:
+            if hasattr(chunk, 'choices') and chunk.choices:
+                if chunk.choices[0].delta.content:
+                    text += chunk.choices[0].delta.content
+        
+        print("✅ Respuesta recibida!")
+        print(f"📥 Respuesta: {text}")
+        
 except Exception as e:
     print(f"❌ Error: {e}")
+    import traceback
+    traceback.print_exc()
     sys.exit(1)
 
 print("\n✅ Test completado - IA funcionando!")
