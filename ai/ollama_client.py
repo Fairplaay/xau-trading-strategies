@@ -98,18 +98,39 @@ Responde SOLO con una palabra: BUY, SELL o NADA"""
                     messages=[
                         {
                             "role": "system",
-                            "content": "Eres un asistente de trading. Tu única tarea es dar señales para XAUUSD. "
-                                      "Responde EXACTAMENTE con una palabra: BUY, SELL o NADA. "
-                                      "Sin explicaciones, sin saludos, sin contexto."
+                            "content": """Eres un ANALISTA de trading para XAUUSD M1.
+ Tu único trabajo es CONFIRMAR o RECHAZAR señales de trading.
+ 
+ REGLAS:
+ 1. Si la estrategia dice SELL y el precio está BAJO el EMA50 → CONFIRMA SELL
+ 2. Si la estrategia dice BUY y el precio está SOBRE el EMA50 → CONFIRMA BUY  
+ 3. Si el RSI está en sobrecompra (>70) o sobreventa (<30) → RECHAZAR
+ 4. Si hay noticia de alto impacto pronto → RECHAZAR
+ 
+ IMPORTANTE: Responde SOLO con la palabra exacta que corresponda:
+ - Si confirmas SELL -> escribe "SELL"
+ - Si confirmas BUY -> escribe "BUY"  
+ - Si rechazas -> escribe "NADA"
+ 
+ NADA de explicaciones, NADA de texto adicional."""
                         },
                         {
                             "role": "user",
-                            "content": prompt + "\n\nResponde SOLO con: BUY, SELL o NADA"
+                            "content": f"""La estrategia detecta: {strategy_rules.get('direction', 'N/A')}
+
+Datos del mercado:
+- Precio actual: ${market_data.get('price', 'N/A')}
+- EMA50: ${market_data.get('ema50', 'N/A')}
+- EMA200: ${market_data.get('ema200', 'N/A')}
+- RSI: {market_data.get('rsi', 'N/A')}
+- Tendencia: {market_data.get('trend', 'N/A')}
+
+Responde SOLO: SELL, BUY o NADA"""
                         }
                     ],
                     options={
                         "temperature": 0.0,
-                        "num_predict": 5,
+                        "num_predict": 3,
                         "repeat_penalty": 1.5
                     }
                 )
