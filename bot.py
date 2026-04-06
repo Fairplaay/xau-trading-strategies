@@ -75,22 +75,14 @@ class TradingBot:
             return False
         print(f"   {self.strategy.description}")
         
-        # 5. Conectar a MT5 o API Server
-        if self.config.USE_API_SERVER:
-            print("\n🌐 Conectando a API Server del EA...")
-            from mt5.api_connector import APIConnector
-            self.mt5 = APIConnector(api_url=self.config.API_SERVER_URL)
+        # 5. Conectar a MT5 o Archivo del EA
+        if self.config.USE_EA_FILE:
+            print("\n📁 Conectando al archivo del EA...")
+            from mt5.api_connector import FileConnector
+            self.mt5 = FileConnector(data_dir=self.config.EA_FILE_PATH if self.config.EA_FILE_PATH else None)
             if not self.mt5.connect():
-                print("⚠️ No se pudo conectar al API Server, intentando MT5 directo...")
-                from mt5.connector import MT5Connector
-                self.mt5 = MT5Connector()
-                if not self.mt5.connect(
-                    login=self.config.MT5_ACCOUNT,
-                    password=self.config.MT5_PASSWORD,
-                    server=self.config.MT5_SERVER
-                ):
-                    print("❌ No se pudo conectar a MT5")
-                    return False
+                print("❌ No se pudo conectar al archivo del EA")
+                return False
         else:
             print("\n🔌 Conectando a MetaTrader 5...")
             self.mt5 = MT5Connector()

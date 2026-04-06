@@ -95,19 +95,18 @@ python bot.py --strategy EMARSI
 python bot.py --strategy STRUCTURE
 ```
 
-### Con API Server del EA (alternative to MT5 directo):
+### Con archivo del EA (lee el JSON directamente, sin servidor):
 
-Si tienes el EA corriendo con el servidor FastAPI:
+El EA escribe `xau_data.json`, el bot lo lee directamente:
 ```bash
 # En tu archivo .env:
-USE_API_SERVER=true
-API_SERVER_URL=http://localhost:5555
+USE_EA_FILE=true
 
 # Ejecutar el bot
 python bot.py --strategy EMARSI
 ```
 
-El bot se conectará al servidor del EA en vez de a MT5 directo.
+El bot busca automáticamente el archivo en las rutas de Wine MT5.
 
 ## 🧠 Modelos (DEFAULT)
 

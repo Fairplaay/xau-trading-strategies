@@ -32,9 +32,9 @@ class Config:
     VOLUME: float = float(os.getenv("VOLUME", "0.01"))
     DEVIATION: int = int(os.getenv("DEVIATION", "20"))  # pips
     
-    # API Server (alternativa a MT5 directo)
-    USE_API_SERVER: bool = os.getenv("USE_API_SERVER", "false").lower() == "true"
-    API_SERVER_URL: str = os.getenv("API_SERVER_URL", "http://localhost:5555")
+    # API Server / File (alternativa a MT5 directo)
+    USE_EA_FILE: bool = os.getenv("USE_EA_FILE", "false").lower() == "true"
+    EA_FILE_PATH: str = os.getenv("EA_FILE_PATH", "")  # opcional, busca automático
     
     # News Filter
     NEWS_LOOKAHEAD_MINUTES: int = int(os.getenv("NEWS_LOOKAHEAD_MINUTES", "30"))
