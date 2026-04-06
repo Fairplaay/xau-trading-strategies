@@ -40,18 +40,46 @@ class NewsCalendar:
     
     def load(self) -> bool:
         """Carga el calendario de la semana desde ForexFactory."""
-        try:
-            response = requests.get(self.url, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            
-            self.events = self._parse_events(data)
-            self._loaded = True
-            print(f"📰 Calendario cargado: {len(self.events)} eventos")
-            return True
-        except Exception as e:
-            print(f"❌ Error cargando calendario: {e}")
-            return False
+        import time
+        import os
+        
+        # Intentar hasta 3 veces con delay
+        for attempt in range(3):
+            try:
+                # Verificar cache local (archivo json en directorio del proyecto)
+                cache_file = os.path.join(os.path.dirname(__file__), "..", "cache", "news_cache.json")
+                if os.path.exists(cache_file):
+                    age = time.time() - os.path.getmtime(cache_file)
+                    if age < 3600:  # Cache válido por 1 hora
+                        with open(cache_file, "r") as f:
+                            data = json.load(f)
+                            self.events = self._parse_events(data)
+                            self._loaded = True
+                            print(f"📰 Calendario cargado desde cache: {len(self.events)} eventos")
+                            return True
+                
+                response = requests.get(self.url, timeout=15)
+                response.raise_for_status()
+                data = response.json()
+                
+                self.events = self._parse_events(data)
+                self._loaded = True
+                
+                # Guardar cache
+                os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+                with open(cache_file, "w") as f:
+                    json.dump(data, f)
+                
+                print(f"📰 Calendario cargado: {len(self.events)} eventos")
+                return True
+                
+            except Exception as e:
+                if attempt < 2:
+                    print(f"⚠️ Intento {attempt+1} falló, reintentando en 2s...")
+                    time.sleep(2)
+                else:
+                    print(f"❌ Error cargando calendario: {e}")
+        return False
     
     def _parse_events(self, data: List[Dict]) -> List[NewsEvent]:
         """Parsea los eventos del JSON de ForexFactory."""
