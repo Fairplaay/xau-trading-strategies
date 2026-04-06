@@ -18,6 +18,8 @@ from news.calendar import NewsCalendar
 from ai.openrouter_client import AITradingClient
 from mt5.connector import MT5Connector
 from strategies import get_strategy, list_strategies
+from memory import Memory
+from learnings import Learnings
 
 
 class TradingBot:
@@ -33,6 +35,8 @@ class TradingBot:
         self.ai = None
         self.mt5 = None
         self.strategy = None
+        self.memory = None
+        self.learnings = None
     
     def initialize(self) -> bool:
         """Inicializa todos los componentes."""
@@ -79,6 +83,21 @@ class TradingBot:
             return False
         
         print("\n✅ Inicialización completa!")
+        
+        # 6. Cargar contexto (memory + learnings)
+        print("\n🧠 Cargando contexto...")
+        self.memory = Memory()
+        self.learnings = Learnings()
+        
+        # Inicializar IA con contexto
+        if self.ai and self.ai._connected:
+            self.ai.initialize_context(
+                memory_context=self.memory.get_context(),
+                learnings_context=self.learnings.get_context()
+            )
+            print(f"   Memory: {len(self.memory)} items")
+            print(f"   Learnings: {len(self.learnings)} items")
+        
         return True
     
     def get_market_data(self) -> dict:
@@ -274,6 +293,13 @@ class TradingBot:
                             )
                             if result and result.get("success"):
                                 print(f"✅ Orden ejecutada!")
+                                # Actualizar memory
+                                if self.memory:
+                                    self.memory.add_operation(
+                                        direction=ai_decision,
+                                        symbol=self.config.SYMBOL,
+                                        pnl="pendiente"
+                                    )
                             else:
                                 print(f"❌ Error en orden: {result}")
                         else:

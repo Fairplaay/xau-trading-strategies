@@ -9,6 +9,20 @@ from typing import Optional, Dict, Any
 from openrouter import OpenRouter
 
 
+# PROMPT INICIAL - Rol Scalper
+SYSTEM_PROMPT = """Eres un scalper profesional de XAU/USD en timeframe M1.
+Buscas operaciones rápidas con SL ajustados.
+Tu objetivo: muchas operaciones pequeñas, profits constantes.
+Agresivo pero con gestión de riesgo estricta.
+
+Tu metodología:
+- Solo confirmar operaciones cuando el setup sea CLARO
+- Priorizar calidad sobre cantidad
+- Si hay duda, responder NADA
+- Verificar siempre noticias de alto impacto antes de confirmar
+- Si hay noticia ±30 min → NO OPERAR"""
+
+
 class AITradingClient:
     """Cliente para interactuar con modelos de OpenRouter."""
     
@@ -17,6 +31,7 @@ class AITradingClient:
         self.model = model
         self.client = None
         self._connected = False
+        self.initial_context = ""
     
     def connect(self) -> bool:
         """Inicializa la conexión con OpenRouter."""
@@ -29,9 +44,25 @@ class AITradingClient:
             print(f"❌ Error conectando a OpenRouter: {e}")
             return False
     
+    def initialize_context(self, memory_context: str = "", learnings_context: str = ""):
+        """
+        Carga el contexto inicial (solo una vez al iniciar el bot).
+        Combina: System Prompt + Memory + Learnings
+        """
+        self.initial_context = SYSTEM_PROMPT
+        
+        if memory_context:
+            self.initial_context += f"\n\n{memory_context}"
+        
+        if learnings_context:
+            self.initial_context += f"\n\n{learnings_context}"
+        
+        print(f"📌 Contexto inicial cargado ({len(self.initial_context)} chars)")
+    
     def analyze(self, market_data: Dict[str, Any], strategy_rules: str) -> str:
         """
         Analiza datos de mercado y decide señal.
+        Usa el contexto inicial + datos actuales.
         
         Args:
             market_data: Diccionario con precio, RSI, EMA, ATR, etc.
@@ -49,7 +80,7 @@ class AITradingClient:
         try:
             response = self.client.chat.send(
                 messages=[
-                    {"role": "system", "content": "Eres un asistente de trading experto. Responde solo con BUY, SELL o NADA."},
+                    {"role": "system", "content": self.initial_context},
                     {"role": "user", "content": prompt}
                 ],
                 model=self.model
@@ -72,8 +103,6 @@ class AITradingClient:
     def _build_prompt(self, market_data: Dict, strategy_rules: str) -> str:
         """Construye el prompt para la IA."""
         return f"""
-Eres un asistente de trading de XAU/USD.
-
 ## Datos Actuales del Mercado:
 - Precio: ${market_data.get('price', 'N/A')}
 - EMA50: ${market_data.get('ema50', 'N/A')}
