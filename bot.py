@@ -20,14 +20,15 @@ from strategies import get_strategy, list_strategies
 from memory import Memory
 from learnings import Learnings
 
-# Importar conector según modo
+# Importar conector según modo (evitar mt5/__init__.py que puede fallar)
 if Config.USE_EA_FILE:
+    import sys
+    sys.path.insert(0, __file__.rsplit("/", 1)[0])
     from mt5.ea_connector import EAConnector as MT5Connector
 else:
     try:
         from mt5.connector import MT5Connector
     except ImportError:
-        # Si no hay MetaTrader5, usar EAConnector como fallback
         from mt5.ea_connector import EAConnector as MT5Connector
 
 
