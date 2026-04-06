@@ -5,8 +5,8 @@
 
 set -e
 
-MODEL_PRIMARY="tinyllama"
-MODEL_FALLBACK="qwen2:0.5b"
+MODEL_PRIMARY="qwen2:0.5b"
+MODEL_FALLBACK="gemma4:e2b"
 
 echo "============================================"
 echo "🚀 Instalando Ollama + Gemma 4 E2B"
