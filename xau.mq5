@@ -1,6 +1,6 @@
 //+------------------------------------------------------------------+
 //|                                        XAU_DataSender.mq5       |
-//|                                        Para Kilito — v4          |
+//|                                        Para Kilito — v4.1      |
 //|                                        Envía y recibe comandos   |
 //+------------------------------------------------------------------+
 // Este Expert Advisor:
@@ -17,7 +17,7 @@
 //+------------------------------------------------------------------+
 
 #property copyright "Kilito - Trading System"
-#property version   "4.00"
+#property version   "4.10"
 #property strict
 
 //--- Input parameters
@@ -54,7 +54,7 @@ int OnInit()
       return(INIT_FAILED);
    }
 
-   Print("XAU DataSender v4 iniciado");
+   Print("XAU DataSender v4.1 iniciado");
    Print("Datos: ", OutputFile);
    Print("Comandos: ", CommandFile);
 
@@ -161,9 +161,9 @@ void ProcessCommands()
       
       // Ejecutar según acción
       if(action == "BUY")
-         orderTicket = ExecuteOrder(ORDER_TYPE_BUY, volume, sl, tp);
+         orderTicket = (int)ExecuteOrder(ORDER_TYPE_BUY, volume, sl, tp);
       else if(action == "SELL")
-         orderTicket = ExecuteOrder(ORDER_TYPE_SELL, volume, sl, tp);
+         orderTicket = (int)ExecuteOrder(ORDER_TYPE_SELL, volume, sl, tp);
       else if(action == "CLOSE")
          orderTicket = CloseOrder((int)ticket) ? (int)ticket : 0;
       else if(action == "MODIFY")
@@ -218,7 +218,7 @@ long GetParamLong(string content, string param)
 }
 
 //+------------------------------------------------------------------+
-long ExecuteOrder(ENUM_ORDER_TYPE type, double volume, double sl, double tp)
+ulong ExecuteOrder(ENUM_ORDER_TYPE type, double volume, double sl, double tp)
 {
    double price = (type == ORDER_TYPE_BUY) ? SymbolInfoDouble(_Symbol, SYMBOL_ASK) 
                                             : SymbolInfoDouble(_Symbol, SYMBOL_BID);
@@ -254,23 +254,28 @@ bool CloseOrder(int ticket)
    if(ticket <= 0)
       return false;
       
-   if(!OrderSelect(ticket))
+   // Usar OrderSelect para posiciones
+   if(!PositionSelectByTicket(ticket))
       return false;
       
-   ENUM_ORDER_TYPE type = (OrderType() == ORDER_TYPE_BUY) ? ORDER_TYPE_SELL : ORDER_TYPE_BUY;
+   ENUM_POSITION_TYPE posType = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+   ENUM_ORDER_TYPE type = (posType == POSITION_TYPE_BUY) ? ORDER_TYPE_SELL : ORDER_TYPE_BUY;
    double price = (type == ORDER_TYPE_BUY) ? SymbolInfoDouble(_Symbol, SYMBOL_ASK) 
                                             : SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   
+   double volume = PositionGetDouble(POSITION_VOLUME);
+   ulong magic = PositionGetInteger(POSITION_MAGIC);
    
    MqlTradeRequest request = {};
    MqlTradeResult result = {};
    
    request.action = TRADE_ACTION_DEAL;
    request.symbol = _Symbol;
-   request.volume = OrderLots();
+   request.volume = volume;
    request.type = type;
    request.price = price;
    request.deviation = 20;
-   request.magic = OrderMagicNumber();
+   request.magic = magic;
    request.comment = "Kilito Close";
    request.position = ticket;
    request.type_time = ORDER_TIME_GTC;
@@ -285,7 +290,7 @@ bool ModifyOrder(int ticket, double sl, double tp)
    if(ticket <= 0)
       return false;
       
-   if(!OrderSelect(ticket))
+   if(!PositionSelectByTicket(ticket))
       return false;
    
    MqlTradeRequest request = {};
@@ -295,7 +300,7 @@ bool ModifyOrder(int ticket, double sl, double tp)
    request.position = ticket;
    request.sl = NormalizeDouble(sl, _Digits);
    request.tp = NormalizeDouble(tp, _Digits);
-   request.magic = OrderMagicNumber();
+   request.magic = PositionGetInteger(POSITION_MAGIC);
    
    return OrderSend(request, result) && result.retcode == TRADE_RETCODE_DONE;
 }
@@ -303,16 +308,15 @@ bool ModifyOrder(int ticket, double sl, double tp)
 //+------------------------------------------------------------------+
 void DeleteCommandFile()
 {
-   int handle = FileOpen(CommandFile, FILE_DELETE);
-   if(handle != INVALID_HANDLE)
-      FileClose(handle);
+   // MQL5 no tiene FILE_DELETE, renombrar archivo vacío
+   string tempName = CommandFile + ".bak";
+   FileMove(CommandFile, 0, tempName, FILE_REWRITE);
 }
 
 //+------------------------------------------------------------------+
 void WriteResult(int ticket, string result)
 {
-   // Agregar resultado al archivo de datos
-   // El Python debe verificar este campo
+   // El resultado se escribe en WriteData()
 }
 
 //+------------------------------------------------------------------+
@@ -359,6 +363,7 @@ void WriteData()
    string accountStr = IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
    string serverStr = AccountInfoString(ACCOUNT_SERVER);
    string ts = TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS);
+   string lastCmd = (lastCommandTime > 0) ? TimeToString(lastCommandTime, TIME_DATE|TIME_SECONDS) : "";
 
    FileWriteString(handle, "{\n");
    FileWriteString(handle, "  \"symbol\": \"" + _Symbol + "\",\n");
@@ -373,7 +378,7 @@ void WriteData()
    FileWriteString(handle, "  \"atr14\": " + DoubleToString(atr, 2) + ",\n");
    FileWriteString(handle, "  \"account\": " + accountStr + ",\n");
    FileWriteString(handle, "  \"server\": \"" + serverStr + "\",\n");
-   FileWriteString(handle, "  \"last_command_result\": \"\",\n");
+   FileWriteString(handle, "  \"last_command\": \"" + lastCmd + "\",\n");
 
    // Velas
    FileWriteString(handle, "  \"velas\": [\n");
