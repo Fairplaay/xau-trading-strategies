@@ -369,8 +369,13 @@ class TradingBot:
                 else:
                     print(f"⏳ [{datetime.now().strftime('%H:%M:%S')}] Sin señal - {market_data.get('trend', 'N/A')} | RSI: {market_data.get('rsi', 0):.1f}")
                 
-                # Esperar hasta 5 segundos antes del próximo minuto
-                time.sleep(55)
+                # Esperar hasta el segundo 55 del siguiente minuto
+                from datetime import datetime
+                now = datetime.now()
+                wait = 55 - now.second
+                if wait <= 0:
+                    wait += 60  # Ya pasó el 55, esperar al siguiente
+                time.sleep(wait)
                 
             except Exception as e:
                 print(f"❌ Error en loop: {e}")
