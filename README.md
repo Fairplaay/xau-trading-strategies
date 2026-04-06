@@ -11,8 +11,8 @@ Bot de trading automatizado con IA para XAU/USD, integrado con MetaTrader 5 y Op
 ## 📦 Instalación
 
 ```bash
-# Clonar y entrar al directorio
-cd xau-trading-strategies/ai-bot
+# Clonar la rama feature/ai-bot
+git checkout origin/feature/ai-bot
 
 # Crear entorno virtual (recomendado)
 python -m venv venv
@@ -35,6 +35,23 @@ cp .env.example .env
 OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxx
 ```
 
+## 🔍 Ver Modelos Disponibles
+
+Para ver qué modelos hay disponibles y filtrar por free/paid:
+
+```bash
+# Todos los modelos
+python list_models.py
+
+# Solo gratuitos
+python list_models.py --free
+
+# Con API key directa
+python list_models.py --api-key tu-api-key
+```
+
+Esto te mostrará los IDs exactos para poner en `MODEL_NAME`.
+
 ## 🚀 Uso
 
 ### Ver estrategias disponibles:
@@ -44,10 +61,10 @@ python bot.py --list-strategies
 
 ### Ejecutar con una estrategia:
 ```bash
-# Estrategia EMA/RSI/ATR (default)
+# Estrategia EMA/RSI (default)
 python bot.py --strategy EMARSI
 
-# Estrategia Price Structure
+# Estrategia Structure
 python bot.py --strategy STRUCTURE
 ```
 
@@ -58,30 +75,32 @@ MT5_PASSWORD=tu_password
 MT5_SERVER=TuBroker-Server
 ```
 
-## 🧠 Modelos Gratuitos
+## 🧠 Modelos (DEFAULT)
 
-OpenRouter ofrece modelos gratuitos. El default es:
+El bot viene con este modelo gratuito por defecto:
 
-| Modelo | ID |
-|--------|-----|
-| Llama 3.2 3B | `meta-llama/llama-3.2-3b-instruct:free` |
+```bash
+MODEL_NAME=meta-llama/llama-3.2-3b-instruct:free
+```
 
-Otros modelos gratuitos disponibles:
-- `deepseek/deepseek-r1:free`
-- `qwen/qwen-2.5-7b-instruct:free`
+Para ver todos los disponibles, ejecuta:
+```bash
+python list_models.py --free
+```
 
 ## 📁 Estructura
 
 ```
-ai-bot/
+xau-trading-strategies/
 ├── bot.py                 # Loop principal
 ├── config.py              # Configuración (ENV)
+├── list_models.py         # Listador de modelos
 ├── requirements.txt       # Dependencias
 ├── .env.example          # Template de variables
 ├── strategies/            # Estrategias de trading
 │   ├── base.py           # Clase base
-│   ├── ema_rsi_atr.py    # Estrategia A
-│   └── price_structure.py # Estrategia B
+│   ├── ema_rsi_atr.py    # EMARSI
+│   └── price_structure.py # STRUCTURE
 ├── news/                  # Calendario de noticias
 │   └── calendar.py       # ForexFactory
 ├── ai/                   # Cliente IA
@@ -92,4 +111,4 @@ ai-bot/
 
 ## ⚠️ Disclaimer
 
-Este bot es para fines educativos. Sempre verifica las señales antes de operar. El autor no se hace responsable de pérdidas financieras.
+Este bot es para fines educativos. Siempre verifica las señales antes de operar. El autor no se hace responsable de pérdidas financieras.
