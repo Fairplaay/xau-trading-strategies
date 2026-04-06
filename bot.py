@@ -289,21 +289,32 @@ class TradingBot:
         
         signal.signal(signal.SIGINT, handle_interrupt)
         
-        # Loop principal
+        # Loop principal - sincronizado con inicio de vela M1
+        # Ejecuta 5 segundos ANTES del inicio de cada minuto (anticipación)
         while self.running:
             try:
+                # Calcular tiempo hasta próximo minuto
+                now = datetime.now()
+                # El próximo minuto empieza en (60 - segundo) segundos
+                # Ejecutamos 5 segundos antes: (60 - segundo) - 5 = 55 - segundo
+                seconds_to_wait = max(1, 55 - now.second)
+                
+                # Obtener datos ANTES de que termine el minuto actual
+                # Esto nos da la vela que está por cerrar
+                
                 # 1. Verificar noticias
                 news_status = self.check_news_block()
                 if news_status["blocked"]:
                     print(f"⏸️ [{datetime.now().strftime('%H:%M:%S')}] Bloqueado por noticias ({news_status['level']}): {news_status.get('reason', '')}")
-                    time.sleep(self.config.CHECK_INTERVAL)
+                    # Calcular espera para próximo ciclo (5 seg antes del minuto)
+                    time.sleep(max(1, 55 - datetime.now().second))
                     continue
                 
                 # 2. Obtener datos del mercado
                 market_data = self.get_market_data()
                 if not market_data:
                     print(f"⚠️ [{datetime.now().strftime('%H:%M:%S')}] No se pudo obtener datos")
-                    time.sleep(self.config.CHECK_INTERVAL)
+                    time.sleep(max(1, 55 - datetime.now().second))
                     continue
                 
                 # Agregar estado de noticias al market_data
@@ -358,11 +369,12 @@ class TradingBot:
                 else:
                     print(f"⏳ [{datetime.now().strftime('%H:%M:%S')}] Sin señal - {market_data.get('trend', 'N/A')} | RSI: {market_data.get('rsi', 0):.1f}")
                 
-                time.sleep(self.config.CHECK_INTERVAL)
+                # Esperar hasta 5 segundos antes del próximo minuto
+                time.sleep(max(1, 55 - datetime.now().second))
                 
             except Exception as e:
                 print(f"❌ Error en loop: {e}")
-                time.sleep(self.config.CHECK_INTERVAL)
+                time.sleep(max(1, 55 - datetime.now().second))
         
         # Cleanup
         print("\n🔌 Cerrando conexiones...")
