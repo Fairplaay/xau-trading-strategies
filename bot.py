@@ -16,10 +16,19 @@ sys.path.insert(0, __file__.rsplit("/", 1)[0])
 from config import Config
 from news.calendar import NewsCalendar
 from ai.openrouter_client import AITradingClient
-from mt5.connector import MT5Connector
 from strategies import get_strategy, list_strategies
 from memory import Memory
 from learnings import Learnings
+
+# Importar conector según modo
+if Config.USE_EA_FILE:
+    from mt5.ea_connector import EAConnector as MT5Connector
+else:
+    try:
+        from mt5.connector import MT5Connector
+    except ImportError:
+        # Si no hay MetaTrader5, usar EAConnector como fallback
+        from mt5.ea_connector import EAConnector as MT5Connector
 
 
 class TradingBot:

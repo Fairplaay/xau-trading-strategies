@@ -1,6 +1,16 @@
 # Logs
 *.log
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+
 # Entornos
 .env
 .env.local
@@ -12,3 +22,7 @@ Thumbs.db
 # Node
 node_modules/
 npm-debug.log*
+
+# MT5
+*.ex5
+*.ex4
