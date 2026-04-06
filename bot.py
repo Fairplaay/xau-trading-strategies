@@ -285,13 +285,13 @@ class TradingBot:
                 market_data["news_status"] = f"Sin bloqueo ({news_status['level']})"
                 
                 # 3. Analizar con estrategia (sin IA, solo reglas)
-                signal = self.strategy.analyze(market_data)
+                trade_signal = self.strategy.analyze(market_data)
                 
-                if signal:
-                    print(f"\n🚨 SEÑAL DETECTADA: {signal.direction}")
-                    print(f"   Precio: ${signal.price:.2f}")
-                    print(f"   SL: ${signal.sl:.2f} | TP1: ${signal.tp1:.2f}")
-                    print(f"   Razón: {signal.reason}")
+                if trade_signal:
+                    print(f"\n🚨 SEÑAL DETECTADA: {trade_signal.direction}")
+                    print(f"   Precio: ${trade_signal.price:.2f}")
+                    print(f"   SL: ${trade_signal.sl:.2f} | TP1: ${trade_signal.tp1:.2f}")
+                    print(f"   Razón: {trade_signal.reason}")
                     
                     # 4. Si hay IA, confirmar con ella
                     if self.ai and self.ai._connected:
@@ -310,7 +310,7 @@ class TradingBot:
                                 order_type=ai_decision,
                                 volume=self.config.VOLUME,
                                 deviation=self.config.DEVIATION,
-                                comment=f"{self.strategy.name} - {signal.reason}"
+                                comment=f"{self.strategy.name} - {trade_signal.reason}"
                             )
                             if result and result.get("success"):
                                 print(f"✅ Orden ejecutada!")
