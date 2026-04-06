@@ -112,19 +112,28 @@ Responde SOLO con una palabra: BUY, SELL o NADA"""
                         }
                     ],
                     options={
-                        "temperature": 0.1,
-                        "num_predict": 10
+                        "temperature": 0.3,
+                        "num_predict": 50
                     }
                 )
                 
                 content = response.get("message", {}).get("content", "").strip().upper()
                 
-                if "BUY" in content:
-                    return "BUY"
-                elif "SELL" in content:
-                    return "SELL"
-                else:
-                    return "NADA"
+                print(f"   📝 IA响应: {content[:80]}...")
+                
+                # Normalizar respuesta - buscar cualquier indicación
+                buy_indicators = ["BUY", "COMPRAR", "LONG", "CALL", "APUYAR", "SUBE", "ALCISTA"]
+                sell_indicators = ["SELL", "VENDER", "SHORT", "PUT", "BAJAR", "BAJISTA", "NEGATIVO"]
+                
+                for indicator in buy_indicators:
+                    if indicator in content:
+                        return "BUY"
+                
+                for indicator in sell_indicators:
+                    if indicator in content:
+                        return "SELL"
+                
+                return "NADA"
                     
             except Exception as e:
                 print(f"⚠️ Modelo {model} falló: {e}")
