@@ -1,228 +1,213 @@
 //+------------------------------------------------------------------+
-//|                                        XAU_DataSender.mq5       |
-//|                                        Para Kilito — v5          |
-//|                                        Envía y recibe comandos   |
+//| XAU_DataSender.mq5 v6 - Para Kilito                             |
+//| Comunica con Python via archivos JSON                            |
 //+------------------------------------------------------------------+
 
-#property copyright "Kilito - Trading System"
-#property version   "5.00"
+#property copyright "Kilito"
+#property version   "6.00"
 #property strict
 
-//--- Input parameters
-input string OutputFile   = "xau_data.json";
-input string CommandFile  = "xau_commands.json";
-input int    RSI_Period   = 14;
+//--- Inputs
+input string InpDataFile = "xau_data.json";
+input string InpCmdFile = "xau_commands.json";
+input int    RSI_Period = 14;
 input int    EMA50_Period = 50;
 input int    EMA200_Period = 200;
-input int    ATR_Period   = 14;
-input int    CandlesToSend = 250;
+input int    ATR_Period = 14;
+input int    BarsToSave = 200;
 
-//--- Handles de indicadores
-int rsi_handle;
-int ema50_handle;
-int ema200_handle;
-int atr_handle;
-datetime lastBarTime = 0;
-datetime lastCommandTime = 0;
+//--- Handles
+int handle_rsi = INVALID_HANDLE;
+int handle_ema50 = INVALID_HANDLE;
+int handle_ema200 = INVALID_HANDLE;
+int handle_atr = INVALID_HANDLE;
+
+//--- Time tracking
+datetime last_bar_time = 0;
+datetime last_cmd_time = 0;
 
 //+------------------------------------------------------------------+
 int OnInit()
 {
-   rsi_handle = iRSI(_Symbol, PERIOD_CURRENT, RSI_Period, PRICE_CLOSE);
-   ema50_handle = iMA(_Symbol, PERIOD_CURRENT, EMA50_Period, 0, MODE_EMA, PRICE_CLOSE);
-   ema200_handle = iMA(_Symbol, PERIOD_CURRENT, EMA200_Period, 0, MODE_EMA, PRICE_CLOSE);
-   atr_handle = iATR(_Symbol, PERIOD_CURRENT, ATR_Period);
-
-   if(rsi_handle == INVALID_HANDLE || ema50_handle == INVALID_HANDLE ||
-      ema200_handle == INVALID_HANDLE || atr_handle == INVALID_HANDLE)
+   handle_rsi = iRSI(_Symbol, PERIOD_CURRENT, RSI_Period, PRICE_CLOSE);
+   handle_ema50 = iMA(_Symbol, PERIOD_CURRENT, EMA50_Period, 0, MODE_EMA, PRICE_CLOSE);
+   handle_ema200 = iMA(_Symbol, PERIOD_CURRENT, EMA200_Period, 0, MODE_EMA, PRICE_CLOSE);
+   handle_atr = iATR(_Symbol, PERIOD_CURRENT, ATR_Period);
+   
+   if(handle_rsi == INVALID_HANDLE || handle_ema50 == INVALID_HANDLE ||
+      handle_ema200 == INVALID_HANDLE || handle_atr == INVALID_HANDLE)
    {
-      Print("Error creando handles de indicadores");
-      return(INIT_FAILED);
+      Print("ERROR: No se pudieron crear los indicadores");
+      return INIT_FAILED;
    }
-
-   Print("XAU DataSender v5 iniciado");
+   
+   Print("XAU DataSender v6 iniciado");
    WriteData();
-   return(INIT_SUCCEEDED);
+   return INIT_SUCCEEDED;
 }
 
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-   IndicatorRelease(rsi_handle);
-   IndicatorRelease(ema50_handle);
-   IndicatorRelease(ema200_handle);
-   IndicatorRelease(atr_handle);
+   if(handle_rsi != INVALID_HANDLE) IndicatorRelease(handle_rsi);
+   if(handle_ema50 != INVALID_HANDLE) IndicatorRelease(handle_ema50);
+   if(handle_ema200 != INVALID_HANDLE) IndicatorRelease(handle_ema200);
+   if(handle_atr != INVALID_HANDLE) IndicatorRelease(handle_atr);
+   Print("XAU DataSender detenido");
 }
 
 //+------------------------------------------------------------------+
 void OnTick()
 {
-   datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
+   // Procesar comandos
+   ProcessCommand();
    
-   ProcessCommands();
-   
-   if(currentBarTime != lastBarTime)
+   // Escribir datos cuando cambia vela
+   datetime curr_time = iTime(_Symbol, PERIOD_CURRENT, 0);
+   if(curr_time != last_bar_time)
    {
-      lastBarTime = currentBarTime;
+      last_bar_time = curr_time;
       WriteData();
    }
 }
 
 //+------------------------------------------------------------------+
-void ProcessCommands()
+void ProcessCommand()
 {
-   int handle = FileOpen(CommandFile, FILE_READ|FILE_TXT|FILE_ANSI);
-   if(handle == INVALID_HANDLE)
+   // Abrir archivo de comandos
+   int h = FileOpen(InpCmdFile, FILE_READ|FILE_TXT|FILE_ANSI);
+   if(h == INVALID_HANDLE)
       return;
    
-   string content = "";
-   while(!FileIsEnding(handle))
-      content += FileReadString(handle);
-   FileClose(handle);
+   // Leer todo el contenido
+   string data = "";
+   while(!FileIsEnding(h))
+      data += FileReadString(h);
+   FileClose(h);
    
-   if(content == "")
+   if(data == "")
       return;
    
    // Extraer timestamp
-   int tsPos = StringFind(content, "\"timestamp\":");
-   if(tsPos == -1)
+   int pos = StringFind(data, "\"timestamp\":");
+   if(pos == -1)
    {
-      FileDelete(CommandFile);
+      ClearCommandFile();
       return;
    }
    
-   // Extraer valor del timestamp entre comillas
-   int tsStart = StringFind(content, "\"", tsPos + 10) + 1;
-   int tsEnd = StringFind(content, "\"", tsStart);
-   string tsStr = StringSubstr(content, tsStart, tsEnd - tsStart);
-   datetime cmdTime = StringToTime(tsStr);
+   // Buscar entre comillas después de "timestamp":
+   int p1 = StringFind(data, "\"", pos + 11);
+   int p2 = StringFind(data, "\"", p1 + 1);
+   if(p1 == -1 || p2 == -1)
+   {
+      ClearCommandFile();
+      return;
+   }
    
-   if(cmdTime <= lastCommandTime)
+   string ts = StringSubstr(data, p1 + 1, p2 - p1 - 1);
+   datetime cmd_time = StringToTime(ts);
+   
+   if(cmd_time <= last_cmd_time)
       return;
    
-   lastCommandTime = cmdTime;
+   last_cmd_time = cmd_time;
    
    // Extraer action
-   int actionPos = StringFind(content, "\"action\":");
-   if(actionPos == -1)
+   pos = StringFind(data, "\"action\":");
+   if(pos == -1)
    {
-      FileDelete(CommandFile);
+      ClearCommandFile();
       return;
    }
    
-   int actStart = StringFind(content, "\"", actionPos + 8) + 1;
-   int actEnd = StringFind(content, "\"", actStart);
-   string action = StringSubstr(content, actStart, actEnd - actStart);
+   p1 = StringFind(data, "\"", pos + 8);
+   p2 = StringFind(data, "\"", p1 + 1);
+   string action = (p1 != -1 && p2 != -1) ? StringSubstr(data, p1 + 1, p2 - p1 - 1) : "";
    
-   // Extraer volume
-   double volume = GetDoubleParam(content, "volume");
-   double sl = GetDoubleParam(content, "sl");
-   double tp = GetDoubleParam(content, "tp");
-   long ticket = (long)GetDoubleParam(content, "ticket");
+   // Extraer parámetros
+   double vol = GetDoubleValue(data, "volume");
+   double sl = GetDoubleValue(data, "sl");
+   double tp = GetDoubleValue(data, "tp");
+   double tk = GetDoubleValue(data, "ticket");
    
+   // Ejecutar comando
    string result = "OK";
-   int orderTicket = 0;
+   int ticket = 0;
    
    if(action == "BUY")
-      orderTicket = (int)ExecuteOrder(ORDER_TYPE_BUY, volume, sl, tp);
+      ticket = (int)Trade(ORDER_TYPE_BUY, vol, sl, tp);
    else if(action == "SELL")
-      orderTicket = (int)ExecuteOrder(ORDER_TYPE_SELL, volume, sl, tp);
+      ticket = (int)Trade(ORDER_TYPE_SELL, vol, sl, tp);
    else if(action == "CLOSE")
-      orderTicket = ClosePosition(ticket) ? (int)ticket : 0;
+      result = ClosePos((int)tk) ? "OK" : "FAIL";
    else if(action == "MODIFY")
-      orderTicket = ModifyPosition(ticket, sl, tp) ? (int)ticket : 0;
+      result = ModifySLTP((int)tk, sl, tp) ? "OK" : "FAIL";
    else
-      result = "UNKNOWN_ACTION";
+      result = "UNKNOWN";
    
-   Print("Comando procesado: ", action, " Resultado: ", result);
-   FileDelete(CommandFile);
+   Print("CMD: ", action, " -> ", result);
+   ClearCommandFile();
 }
 
 //+------------------------------------------------------------------+
-double GetDoubleParam(string content, string param)
+double GetDoubleValue(string str, string key)
 {
-   int pos = StringFind(content, "\"" + param + "\":");
-   if(pos == -1)
+   string k = "\"" + key + "\":";
+   int p = StringFind(str, k);
+   if(p == -1)
       return 0;
    
-   int start = pos + StringLen(param) + 3;
+   // Buscar inicio del número
+   int i = p + StringLen(k);
+   while(i < StringLen(str) && (str[i] == ' ' || str[i] == '\t'))
+      i++;
+   
    string val = "";
-   for(int i = start; i < StringLen(content); i++)
+   while(i < StringLen(str))
    {
-      uchar c = StringGetCharacter(content, i);
+      uchar c = StringGetCharacter(str, i);
       if((c >= '0' && c <= '9') || c == '.' || c == '-')
          val += ShortToString(c);
       else if(c == ',' || c == '}')
          break;
+      i++;
    }
    
    return StringToDouble(val);
 }
 
 //+------------------------------------------------------------------+
-ulong ExecuteOrder(ENUM_ORDER_TYPE type, double volume, double sl, double tp)
+ulong Trade(ENUM_ORDER_TYPE dir, double lot, double sl, double tp)
 {
-   double price = (type == ORDER_TYPE_BUY) ? SymbolInfoDouble(_Symbol, SYMBOL_ASK) 
-                                            : SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   double price = (dir == ORDER_TYPE_BUY) ? SymbolInfoDouble(_Symbol, SYMBOL_ASK) 
+                                           : SymbolInfoDouble(_Symbol, SYMBOL_BID);
    
-   MqlTradeRequest request = {};
-   MqlTradeResult result = {};
+   MqlTradeRequest req = {};
+   MqlTradeResult res = {};
    
-   request.action = TRADE_ACTION_DEAL;
-   request.symbol = _Symbol;
-   request.volume = volume;
-   request.type = type;
-   request.price = price;
-   request.sl = NormalizeDouble(sl, _Digits);
-   request.tp = NormalizeDouble(tp, _Digits);
-   request.deviation = 20;
-   request.magic = 123456;
-   request.comment = "Kilito Bot";
-   request.type_time = ORDER_TIME_GTC;
-   request.type_filling = ORDER_FILLING_IOC;
+   req.action = TRADE_ACTION_DEAL;
+   req.symbol = _Symbol;
+   req.volume = lot;
+   req.type = dir;
+   req.price = price;
+   req.sl = (sl > 0) ? NormalizeDouble(sl, _Digits) : 0;
+   req.tp = (tp > 0) ? NormalizeDouble(tp, _Digits) : 0;
+   req.deviation = 20;
+   req.magic = 123456;
+   req.comment = "Kilito";
+   req.type_time = ORDER_TIME_GTC;
+   req.type_filling = ORDER_FILLING_IOC;
    
-   bool sent = OrderSend(request, result);
+   if(OrderSend(req, res) && res.retcode == TRADE_RETCODE_DONE)
+      return res.order;
    
-   if(sent && result.retcode == TRADE_RETCODE_DONE)
-      return result.order;
-   
-   Print("Error orden: ", result.retcode);
+   Print("Trade ERROR: ", res.retcode);
    return 0;
 }
 
 //+------------------------------------------------------------------+
-bool ClosePosition(long ticket)
-{
-   if(ticket <= 0)
-      return false;
-      
-   if(!PositionSelectByTicket(ticket))
-      return false;
-      
-   ENUM_POSITION_TYPE posType = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
-   ENUM_ORDER_TYPE type = (posType == POSITION_TYPE_BUY) ? ORDER_TYPE_SELL : ORDER_TYPE_BUY;
-   double price = (type == ORDER_TYPE_BUY) ? SymbolInfoDouble(_Symbol, SYMBOL_ASK) 
-                                            : SymbolInfoDouble(_Symbol, SYMBOL_BID);
-   
-   MqlTradeRequest request = {};
-   MqlTradeResult result = {};
-   
-   request.action = TRADE_ACTION_DEAL;
-   request.symbol = _Symbol;
-   request.volume = PositionGetDouble(POSITION_VOLUME);
-   request.type = type;
-   request.price = price;
-   request.deviation = 20;
-   request.position = (int)ticket;
-   request.comment = "Kilito Close";
-   request.type_time = ORDER_TIME_GTC;
-   request.type_filling = ORDER_FILLING_IOC;
-   
-   return OrderSend(request, result) && result.retcode == TRADE_RETCODE_DONE;
-}
-
-//+------------------------------------------------------------------+
-bool ModifyPosition(long ticket, double sl, double tp)
+bool ClosePos(int ticket)
 {
    if(ticket <= 0)
       return false;
@@ -230,22 +215,53 @@ bool ModifyPosition(long ticket, double sl, double tp)
    if(!PositionSelectByTicket(ticket))
       return false;
    
-   MqlTradeRequest request = {};
-   MqlTradeResult result = {};
+   ENUM_POSITION_TYPE ptype = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+   ENUM_ORDER_TYPE otype = (ptype == POSITION_TYPE_BUY) ? ORDER_TYPE_SELL : ORDER_TYPE_BUY;
+   double price = (otype == ORDER_TYPE_BUY) ? SymbolInfoDouble(_Symbol, SYMBOL_ASK) 
+                                             : SymbolInfoDouble(_Symbol, SYMBOL_BID);
    
-   request.action = TRADE_ACTION_SLTP;
-   request.position = (int)ticket;
-   request.sl = NormalizeDouble(sl, _Digits);
-   request.tp = NormalizeDouble(tp, _Digits);
+   MqlTradeRequest req = {};
+   MqlTradeResult res = {};
    
-   return OrderSend(request, result) && result.retcode == TRADE_RETCODE_DONE;
+   req.action = TRADE_ACTION_DEAL;
+   req.symbol = _Symbol;
+   req.volume = PositionGetDouble(POSITION_VOLUME);
+   req.type = otype;
+   req.price = price;
+   req.deviation = 20;
+   req.position = ticket;
+   req.comment = "Kilito Close";
+   req.type_time = ORDER_TIME_GTC;
+   req.type_filling = ORDER_FILLING_IOC;
+   
+   return OrderSend(req, res) && res.retcode == TRADE_RETCODE_DONE;
 }
 
 //+------------------------------------------------------------------+
-void FileDelete(string filename)
+bool ModifySLTP(int ticket, double sl, double tp)
 {
-   // MQL5 no tiene delete, escribir archivo vacío
-   int h = FileOpen(filename, FILE_WRITE|FILE_TXT|FILE_ANSI);
+   if(ticket <= 0)
+      return false;
+   
+   if(!PositionSelectByTicket(ticket))
+      return false;
+   
+   MqlTradeRequest req = {};
+   MqlTradeResult res = {};
+   
+   req.action = TRADE_ACTION_SLTP;
+   req.position = ticket;
+   req.sl = (sl > 0) ? NormalizeDouble(sl, _Digits) : 0;
+   req.tp = (tp > 0) ? NormalizeDouble(tp, _Digits) : 0;
+   
+   return OrderSend(req, res) && res.retcode == TRADE_RETCODE_DONE;
+}
+
+//+------------------------------------------------------------------+
+void ClearCommandFile()
+{
+   // Sobrescribir con archivo vacío
+   int h = FileOpen(InpCmdFile, FILE_WRITE|FILE_TXT|FILE_ANSI);
    if(h != INVALID_HANDLE)
       FileClose(h);
 }
@@ -253,58 +269,61 @@ void FileDelete(string filename)
 //+------------------------------------------------------------------+
 void WriteData()
 {
+   // Obtener precio
    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-   int spread = (int)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);
-
-   double rsi_buf[1], ema50_buf[1], ema200_buf[1], atr_buf[1];
-
-   if(CopyBuffer(rsi_handle, 0, 0, 1, rsi_buf) < 1 ||
-      CopyBuffer(ema50_handle, 0, 0, 1, ema50_buf) < 1 ||
-      CopyBuffer(ema200_handle, 0, 0, 1, ema200_buf) < 1 ||
-      CopyBuffer(atr_handle, 0, 0, 1, atr_buf) < 1)
-      return;
-
-   double rsi = rsi_buf[0];
-   double ema50 = ema50_buf[0];
-   double ema200 = ema200_buf[0];
-   double atr = atr_buf[0];
-
-   MqlRates rates[];
-   int copied = CopyRates(_Symbol, PERIOD_CURRENT, 0, CandlesToSend, rates);
-   if(copied < 200)
-      return;
-
-   int handle = FileOpen(OutputFile, FILE_WRITE|FILE_TXT|FILE_ANSI);
-   if(handle == INVALID_HANDLE)
-      return;
-
-   string ts = TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS);
-
-   FileWriteString(handle, "{\n");
-   FileWriteString(handle, "  \"symbol\": \"" + _Symbol + "\",\n");
-   FileWriteString(handle, "  \"bid\": " + DoubleToString(bid, 2) + ",\n");
-   FileWriteString(handle, "  \"ask\": " + DoubleToString(ask, 2) + ",\n");
-   FileWriteString(handle, "  \"spread\": " + IntegerToString(spread) + ",\n");
-   FileWriteString(handle, "  \"rsi14\": " + DoubleToString(rsi, 1) + ",\n");
-   FileWriteString(handle, "  \"ema50\": " + DoubleToString(ema50, 2) + ",\n");
-   FileWriteString(handle, "  \"ema200\": " + DoubleToString(ema200, 2) + ",\n");
-   FileWriteString(handle, "  \"atr14\": " + DoubleToString(atr, 2) + ",\n");
-   FileWriteString(handle, "  \"timestamp\": \"" + ts + "\",\n");
-   FileWriteString(handle, "  \"last_command\": \"" + TimeToString(lastCommandTime, TIME_DATE|TIME_SECONDS) + "\",\n");
+   int spr = (int)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);
    
-   FileWriteString(handle, "  \"velas\": [\n");
+   // Obtener indicadores
+   double rsi[], ema50[], ema200[], atr[];
+   ArraySetAsSeries(rsi, false);
+   ArraySetAsSeries(ema50, false);
+   ArraySetAsSeries(ema200, false);
+   ArraySetAsSeries(atr, false);
+   
+   if(CopyBuffer(handle_rsi, 0, 0, 1, rsi) < 1) return;
+   if(CopyBuffer(handle_ema50, 0, 0, 1, ema50) < 1) return;
+   if(CopyBuffer(handle_ema200, 0, 0, 1, ema200) < 1) return;
+   if(CopyBuffer(handle_atr, 0, 0, 1, atr) < 1) return;
+   
+   // Obtener velas
+   MqlRates rates[];
+   int copied = CopyRates(_Symbol, PERIOD_CURRENT, 0, BarsToSave, rates);
+   if(copied < 100)
+      return;
+   
+   // Escribir archivo
+   int h = FileOpen(InpDataFile, FILE_WRITE|FILE_TXT|FILE_ANSI);
+   if(h == INVALID_HANDLE)
+      return;
+   
+   string ts = TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS);
+   
+   FileWriteString(h, "{\n");
+   FileWriteString(h, "  \"symbol\":\"" + _Symbol + "\",\n");
+   FileWriteString(h, "  \"bid\":" + DoubleToString(bid, 2) + ",\n");
+   FileWriteString(h, "  \"ask\":" + DoubleToString(ask, 2) + ",\n");
+   FileWriteString(h, "  \"spread\":" + spr + ",\n");
+   FileWriteString(h, "  \"rsi14\":" + DoubleToString(rsi[0], 1) + ",\n");
+   FileWriteString(h, "  \"ema50\":" + DoubleToString(ema50[0], 2) + ",\n");
+   FileWriteString(h, "  \"ema200\":" + DoubleToString(ema200[0], 2) + ",\n");
+   FileWriteString(h, "  \"atr14\":" + DoubleToString(atr[0], 2) + ",\n");
+   FileWriteString(h, "  \"timestamp\":\"" + ts + "\",\n");
+   FileWriteString(h, "  \"last_cmd\":\"" + TimeToString(last_cmd_time, TIME_DATE|TIME_SECONDS) + "\",\n");
+   FileWriteString(h, "  \"velas\":[\n");
+   
    for(int i = copied - 1; i >= 0; i--)
    {
-      string comma = (i > 0) ? "," : "";
-      FileWriteString(handle, "    {\"t\":\"" + TimeToString(rates[i].time, TIME_DATE|TIME_SECONDS) + "\",");
-      FileWriteString(handle, "\"o\":" + DoubleToString(rates[i].open, 2) + ",");
-      FileWriteString(handle, "\"h\":" + DoubleToString(rates[i].high, 2) + ",");
-      FileWriteString(handle, "\"l\":" + DoubleToString(rates[i].low, 2) + ",");
-      FileWriteString(handle, "\"c\":" + DoubleToString(rates[i].close, 2) + "}" + comma + "\n");
+      string c = (i > 0) ? "," : "";
+      string t = TimeToString(rates[i].time, TIME_DATE|TIME_SECONDS);
+      FileWriteString(h, "    {\"t\":\"" + t + "\",\"o\":" + DoubleToString(rates[i].open, 2) +
+                ",\"h\":" + DoubleToString(rates[i].high, 2) +
+                ",\"l\":" + DoubleToString(rates[i].low, 2) +
+                ",\"c\":" + DoubleToString(rates[i].close, 2) + "}" + c + "\n");
    }
-   FileWriteString(handle, "  ]\n");
-   FileWriteString(handle, "}\n");
-
-   FileClose(handle);
+   
+   FileWriteString(h, "  ]\n");
+   FileWriteString(h, "}\n");
+   
+   FileClose(h);
 }
