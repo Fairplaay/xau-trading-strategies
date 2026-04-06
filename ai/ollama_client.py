@@ -30,9 +30,7 @@ class OllamaClient:
         self.initial_context = ""
     
     def initialize_context(self, memory_context: str = "", learnings_context: str = ""):
-        """
-        Carga el contexto inicial (no necesario para Ollama, pero requerido por el bot).
-        """
+        """Carga el contexto inicial (no necesario para Ollama, pero requerido por el bot)."""
         context = """Eres un scalper profesional de XAU/USD en timeframe M1.
 Buscas operaciones rápidas con SL ajustados.
 Si hay duda, responder NADA.
@@ -118,18 +116,20 @@ Responde SOLO con una palabra: BUY, SELL o NADA"""
                 
                 content = response.get("message", {}).get("content", "").strip().upper()
                 
-                print(f"   📝 IA响应: {content[:80]}...")
+                print(f"   [IA] Response: {content[:80]}...")
                 
-                # Normalizar respuesta - buscar cualquier indicación
-                buy_indicators = ["BUY", "COMPRAR", "LONG", "CALL", "APUYAR", "SUBE", "ALCISTA"]
-                sell_indicators = ["SELL", "VENDER", "SHORT", "PUT", "BAJAR", "BAJISTA", "NEGATIVO"]
+                # Buscar palabras clave
+                buy_words = ["BUY", "LONG", "CALL", "COMPRAR"]
+                sell_words = ["SELL", "SHORT", "PUT", "VENDER"]
                 
-                for indicator in buy_indicators:
-                    if indicator in content:
+                for word in buy_words:
+                    if word in content:
+                        print(f"   [OK] BUY detected ({word})")
                         return "BUY"
                 
-                for indicator in sell_indicators:
-                    if indicator in content:
+                for word in sell_words:
+                    if word in content:
+                        print(f"   [OK] SELL detected ({word})")
                         return "SELL"
                 
                 return "NADA"
