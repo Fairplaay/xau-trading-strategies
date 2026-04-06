@@ -8,8 +8,8 @@ import ollama
 from typing import Optional, Dict, Any
 
 
-# Modelos disponibles (fallback chain)
-MODELS = ["gemma4:e2b", "tinyllama", "qwen2:0.5b"]
+# Modelos disponibles (fallback chain) - tinyllama para CPU sin GPU
+MODELS = ["tinyllama", "qwen2:0.5b", "gemma4:e2b"]
 
 
 class OllamaClient:

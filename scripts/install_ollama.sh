@@ -5,8 +5,8 @@
 
 set -e
 
-MODEL_PRIMARY="gemma4:e2b"
-MODEL_FALLBACK="tinyllama"
+MODEL_PRIMARY="tinyllama"
+MODEL_FALLBACK="qwen2:0.5b"
 
 echo "============================================"
 echo "🚀 Instalando Ollama + Gemma 4 E2B"
@@ -32,17 +32,22 @@ export PATH="$PATH:/usr/local/bin"
 # 4. Descargar modelos
 echo ""
 echo "📥 Descargando modelos..."
-echo "   Primary: $MODEL_PRIMARY (~4GB)"
+echo "   Primary: $MODEL_PRIMARY (~400MB - CPU friendly)"
 echo "   Fallback: $MODEL_FALLBACK (~400MB)"
 
-# Intentar descargar Gemma 4
+# Descargar primary
 if ollama pull "$MODEL_PRIMARY" 2>/dev/null; then
     echo "   ✅ $MODEL_PRIMARY descargado"
 else
-    echo "   ⚠️ $MODEL_PRIMARY falló, usando fallback..."
+    echo "   ⚠️ $MODEL_PRIMARY falló, descargando fallback..."
     ollama pull "$MODEL_FALLBACK"
     MODEL_PRIMARY="$MODEL_FALLBACK"
 fi
+
+# Descargar gemma4:e2b para GPU (opcional)
+echo ""
+echo "📥 (Opcional) Descargando gemma4:e2b para GPU..."
+echo "   Si tienes GPU, ejecuta: ollama pull gemma4:e2b"
 
 # 5. Verificar instalación
 echo ""
