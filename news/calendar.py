@@ -94,8 +94,9 @@ class NewsCalendar:
         try:
             # Nuevo formato ISO: "2026-04-05T05:15:00-04:00"
             if "T" in date_str and "-" in date_str:
-                # Parsear ISO 8601
-                return datetime.fromisoformat(date_str)
+                # Parsear ISO 8601 y convertir a timezone naive (UTC)
+                dt = datetime.fromisoformat(date_str.replace("-04:00", "+00:00").replace("-05:00", "+00:00"))
+                return dt
             
             # Formato antiguo: "Apr 05, 2025 08:30am EST"
             date_str = date_str.replace(" EST", "").replace(" EDT", "")

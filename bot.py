@@ -325,6 +325,8 @@ class TradingBot:
                                 order_type=ai_decision,
                                 volume=self.config.VOLUME,
                                 deviation=self.config.DEVIATION,
+                                sl=trade_signal.sl,
+                                tp=trade_signal.tp1,
                                 comment=f"{self.strategy.name} - {trade_signal.reason}"
                             )
                             if result and result.get("success"):
