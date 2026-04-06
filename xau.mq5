@@ -158,17 +158,18 @@ double GetDoubleValue(string str, string key)
    if(p == -1)
       return 0;
    
-   // Buscar inicio del número
    int i = p + StringLen(k);
-   while(i < StringLen(str) && (str[i] == ' ' || str[i] == '\t'))
+   while(i < StringLen(str) && str[i] == ' ')
       i++;
    
    string val = "";
    while(i < StringLen(str))
    {
-      uchar c = StringGetCharacter(str, i);
+      ushort c = StringGetCharacter(str, i);
       if((c >= '0' && c <= '9') || c == '.' || c == '-')
+      {
          val += ShortToString(c);
+      }
       else if(c == ',' || c == '}')
          break;
       i++;
@@ -274,12 +275,12 @@ void WriteData()
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    int spr = (int)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);
    
-   // Obtener indicadores
+   // Obtener indicadores - true para que índice 0 sea el más reciente
    double rsi[], ema50[], ema200[], atr[];
-   ArraySetAsSeries(rsi, false);
-   ArraySetAsSeries(ema50, false);
-   ArraySetAsSeries(ema200, false);
-   ArraySetAsSeries(atr, false);
+   ArraySetAsSeries(rsi, true);
+   ArraySetAsSeries(ema50, true);
+   ArraySetAsSeries(ema200, true);
+   ArraySetAsSeries(atr, true);
    
    if(CopyBuffer(handle_rsi, 0, 0, 1, rsi) < 1) return;
    if(CopyBuffer(handle_ema50, 0, 0, 1, ema50) < 1) return;
