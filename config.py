@@ -32,6 +32,10 @@ class Config:
     VOLUME: float = float(os.getenv("VOLUME", "0.01"))
     DEVIATION: int = int(os.getenv("DEVIATION", "20"))  # pips
     
+    # API Server (alternativa a MT5 directo)
+    USE_API_SERVER: bool = os.getenv("USE_API_SERVER", "false").lower() == "true"
+    API_SERVER_URL: str = os.getenv("API_SERVER_URL", "http://localhost:5555")
+    
     # News Filter
     NEWS_LOOKAHEAD_MINUTES: int = int(os.getenv("NEWS_LOOKAHEAD_MINUTES", "30"))
     HIGH_IMPACT_BUFFER: int = int(os.getenv("HIGH_IMPACT_BUFFER", "30"))  # min antes/después

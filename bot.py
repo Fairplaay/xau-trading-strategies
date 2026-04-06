@@ -17,6 +17,7 @@ from config import Config
 from news.calendar import NewsCalendar
 from ai.openrouter_client import AITradingClient
 from mt5.connector import MT5Connector
+from mt5.api_connector import APIConnector
 from strategies import get_strategy, list_strategies
 from memory import Memory
 from learnings import Learnings
@@ -74,16 +75,32 @@ class TradingBot:
             return False
         print(f"   {self.strategy.description}")
         
-        # 5. Conectar a MT5
-        print("\n🔌 Conectando a MetaTrader 5...")
-        self.mt5 = MT5Connector()
-        if not self.mt5.connect(
-            login=self.config.MT5_ACCOUNT,
-            password=self.config.MT5_PASSWORD,
-            server=self.config.MT5_SERVER
-        ):
-            print("❌ No se pudo conectar a MT5")
-            return False
+        # 5. Conectar a MT5 o API Server
+        if self.config.USE_API_SERVER:
+            print("\n🌐 Conectando a API Server del EA...")
+            from mt5.api_connector import APIConnector
+            self.mt5 = APIConnector(api_url=self.config.API_SERVER_URL)
+            if not self.mt5.connect():
+                print("⚠️ No se pudo conectar al API Server, intentando MT5 directo...")
+                from mt5.connector import MT5Connector
+                self.mt5 = MT5Connector()
+                if not self.mt5.connect(
+                    login=self.config.MT5_ACCOUNT,
+                    password=self.config.MT5_PASSWORD,
+                    server=self.config.MT5_SERVER
+                ):
+                    print("❌ No se pudo conectar a MT5")
+                    return False
+        else:
+            print("\n🔌 Conectando a MetaTrader 5...")
+            self.mt5 = MT5Connector()
+            if not self.mt5.connect(
+                login=self.config.MT5_ACCOUNT,
+                password=self.config.MT5_PASSWORD,
+                server=self.config.MT5_SERVER
+            ):
+                print("❌ No se pudo conectar a MT5")
+                return False
         
         print("\n✅ Inicialización completa!")
         

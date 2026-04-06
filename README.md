@@ -95,12 +95,19 @@ python bot.py --strategy EMARSI
 python bot.py --strategy STRUCTURE
 ```
 
-### Con MT5 automático (agrega a .env):
+### Con API Server del EA (alternative to MT5 directo):
+
+Si tienes el EA corriendo con el servidor FastAPI:
 ```bash
-MT5_ACCOUNT=12345678
-MT5_PASSWORD=tu_password
-MT5_SERVER=TuBroker-Server
+# En tu archivo .env:
+USE_API_SERVER=true
+API_SERVER_URL=http://localhost:5555
+
+# Ejecutar el bot
+python bot.py --strategy EMARSI
 ```
+
+El bot se conectará al servidor del EA en vez de a MT5 directo.
 
 ## 🧠 Modelos (DEFAULT)
 
