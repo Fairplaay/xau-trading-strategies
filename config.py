@@ -17,8 +17,7 @@ class Config:
     
     # IA Parameters
     TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.1"))  # Precisión vs creatividad
-    MAX_TOKENS: int = int(os.getenv("MAX_TOKENS", "20"))  # Solo respuesta corta
-    REASONING_EFFORT: str = os.getenv("REASONING_EFFORT", "low")  # low/medium/high
+    MAX_TOKENS: int = int(os.getenv("MAX_TOKENS", "20"))
     
     # MT5
     SYMBOL: str = os.getenv("SYMBOL", "XAUUSD")

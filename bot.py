@@ -70,8 +70,7 @@ class TradingBot:
             api_key=self.config.OPENROUTER_API_KEY,
             model=self.config.MODEL_NAME,
             temperature=self.config.TEMPERATURE,
-            max_tokens=self.config.MAX_TOKENS,
-            reasoning_effort=self.config.REASONING_EFFORT
+            max_tokens=self.config.MAX_TOKENS
         )
         if not self.ai.connect():
             print("⚠️ No se pudo conectar a IA, continuando sin análisis...")
