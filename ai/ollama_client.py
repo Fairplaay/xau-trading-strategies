@@ -100,11 +100,8 @@ Responde SOLO con una palabra: BUY, SELL o NADA"""
                     messages=[
                         {
                             "role": "system",
-                            "content": """Eres un scalper profesional de XAU/USD en timeframe M1.
-Buscas operaciones rápidas con SL ajustados.
-Si hay duda, responder NADA.
-Si hay noticia ±30 min → NO OPERAR.
-Responde SOLO con una palabra: BUY, SELL o NADA"""
+                            "content": """Responde EXACTAMENTE con una palabra: BUY, SELL o NADA. 
+No escribas nada más. Solo la palabra."""
                         },
                         {
                             "role": "user",
@@ -112,9 +109,9 @@ Responde SOLO con una palabra: BUY, SELL o NADA"""
                         }
                     ],
                     options={
-                        "temperature": 0.1,
-                        "num_predict": 5,
-                        "repeat_penalty": 1.2
+                        "temperature": 0.0,
+                        "num_predict": 3,
+                        "stop": ["\n", " ", "."]
                     }
                 )
                 
