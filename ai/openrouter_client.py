@@ -88,7 +88,8 @@ class AITradingClient:
                 ],
                 model=self.model,
                 temperature=self.temperature,
-                max_tokens=self.max_tokens
+                max_tokens=self.max_tokens,
+                stream=False
             )
             
             # Verificar que la respuesta tenga contenido
@@ -123,7 +124,8 @@ class AITradingClient:
                     ],
                     model=self.model,
                     temperature=self.temperature,
-                    max_tokens=self.max_tokens
+                    max_tokens=self.max_tokens,
+                    stream=False
                 )
                 decision = response.choices[0].message.content.strip().upper()
                 if "BUY" in decision:
