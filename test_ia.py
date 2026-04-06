@@ -25,19 +25,23 @@ try:
         
         print("📤 Enviando mensaje...")
         
+        # Sin streaming para obtener respuesta directa
         response = client.chat.send(
             messages=[
                 {"role": "user", "content": "Responde solo: HOLA"}
             ],
             model=MODEL,
-            max_tokens=5
+            max_tokens=10,
+            stream=False  # Sin streaming
         )
         
-        # Obtener respuesta completa
-        result = response.get()
+        # La respuesta es un objeto ChatResult
+        print(f"📥 Tipo de respuesta: {type(response)}")
+        print(f"📥 Respuesta completa: {response}")
         
-        print(f"✅ Respuesta: {result}")
-        print(f"📥 Contenido: {result.choices[0].message.content}")
+        # Acceder al contenido
+        content = response.choices[0].message.content
+        print(f"📥 Contenido: '{content}'")
         
 except Exception as e:
     print(f"❌ Error: {e}")
