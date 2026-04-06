@@ -58,7 +58,10 @@ class TradingBot:
         print("\n🤖 Conectando a OpenRouter...")
         self.ai = AITradingClient(
             api_key=self.config.OPENROUTER_API_KEY,
-            model=self.config.MODEL_NAME
+            model=self.config.MODEL_NAME,
+            temperature=self.config.TEMPERATURE,
+            max_tokens=self.config.MAX_TOKENS,
+            reasoning_effort=self.config.REASONING_EFFORT
         )
         if not self.ai.connect():
             print("⚠️ No se pudo conectar a IA, continuando sin análisis...")

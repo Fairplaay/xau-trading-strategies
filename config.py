@@ -15,6 +15,11 @@ class Config:
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
     MODEL_NAME: str = os.getenv("MODEL_NAME", "meta-llama/llama-3.2-3b-instruct:free")
     
+    # IA Parameters
+    TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.1"))  # Precisión vs creatividad
+    MAX_TOKENS: int = int(os.getenv("MAX_TOKENS", "20"))  # Solo respuesta corta
+    REASONING_EFFORT: str = os.getenv("REASONING_EFFORT", "low")  # low/medium/high
+    
     # MT5
     SYMBOL: str = os.getenv("SYMBOL", "XAUUSD")
     TIMEFRAME: str = os.getenv("TIMEFRAME", "M1")

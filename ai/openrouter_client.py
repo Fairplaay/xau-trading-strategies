@@ -26,9 +26,13 @@ Tu metodología:
 class AITradingClient:
     """Cliente para interactuar con modelos de OpenRouter."""
     
-    def __init__(self, api_key: str, model: str = "meta-llama/llama-3.2-3b-instruct:free"):
+    def __init__(self, api_key: str, model: str = "meta-llama/llama-3.2-3b-instruct:free", 
+                 temperature: float = 0.1, max_tokens: int = 20, reasoning_effort: str = "low"):
         self.api_key = api_key
         self.model = model
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.reasoning_effort = reasoning_effort
         self.client = None
         self._connected = False
         self.initial_context = ""
@@ -83,7 +87,10 @@ class AITradingClient:
                     {"role": "system", "content": self.initial_context},
                     {"role": "user", "content": prompt}
                 ],
-                model=self.model
+                model=self.model,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                reasoning_effort=self.reasoning_effort
             )
             
             decision = response.choices[0].message.content.strip().upper()
