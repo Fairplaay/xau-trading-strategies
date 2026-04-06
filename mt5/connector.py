@@ -4,12 +4,118 @@ Conector MetaTrader5 para Linux.
 Usa mt5linux para conectar via Wine/RPyC.
 """
 
+import sys
+
+# Intentar importar mt5linux (Linux) o MetaTrader5 (Windows)
 try:
-    from mt5linux import MetaTrader5
+    from mt5linux import MetaTrader5 as _MT
+    # mt5linux exports una clase, la envolvemos
+    class MT5Wrapper:
+        """Wrapper para mt5linux que provee la API de MetaTrader5."""
+        _instance = None
+        
+        def __new__(cls):
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._mt5 = _MT()
+            return cls._instance
+        
+        def initialize(self):
+            return self._mt5.initialize()
+        
+        def shutdown(self):
+            return self._mt5.shutdown()
+        
+        def login(self, **kwargs):
+            return self._mt5.login(**kwargs)
+        
+        def account_info(self):
+            return self._mt5.account_info()
+        
+        def symbol_info(self, symbol):
+            return self._mt5.symbol_info(symbol)
+        
+        def symbol_info_tick(self, symbol):
+            return self._mt5.symbol_info_tick(symbol)
+        
+        def copy_rates_from_pos(self, symbol, timeframe, start, count):
+            return self._mt5.copy_rates_from_pos(symbol, timeframe, start, count)
+        
+        def order_send(self, request):
+            return self._mt5.order_send(request)
+        
+        def positions_get(self):
+            return self._mt5.positions_get()
+        
+        def position_get(self, **kwargs):
+            return self._mt5.position_get(**kwargs)
+        
+        def last_error(self):
+            return self._mt5.last_error()
+        
+        @property
+        def TIMEFRAME_M1(self):
+            return 1
+        
+        @property
+        def TIMEFRAME_M5(self):
+            return 5
+        
+        @property
+        def TIMEFRAME_M15(self):
+            return 15
+        
+        @property
+        def TIMEFRAME_H1(self):
+            return 16385
+        
+        @property
+        def TIMEFRAME_H4(self):
+            return 16388
+        
+        @property
+        def TIMEFRAME_D1(self):
+            return 32769
+        
+        @property
+        def ORDER_TYPE_BUY(self):
+            return 0
+        
+        @property
+        def ORDER_TYPE_SELL(self):
+            return 1
+        
+        @property
+        def TRADE_ACTION_DEAL(self):
+            return 1
+        
+        @property
+        def ORDER_TIME_GTC(self):
+            return 0
+        
+        @property
+        def ORDER_FILLING_IOC(self):
+            return 1
+        
+        @property
+        def TRADE_RETCODE_DONE(self):
+            return 10009
+        
+        @property
+        def POSITION_TYPE_BUY(self):
+            return 0
+        
+        @property
+        def POSITION_TYPE_SELL(self):
+            return 1
+    
+    MetaTrader5 = MT5Wrapper
+    _MT5_TYPE = "mt5linux"
 except ImportError:
     # Fallback para Windows (desarrollo local)
     import MetaTrader5 as _mt5
     MetaTrader5 = _mt5
+    _MT5_TYPE = "native"
 
 from typing import Optional, Dict, Any
 
