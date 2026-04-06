@@ -17,7 +17,11 @@ if not API_KEY:
     print("❌ Error: Falta OPENROUTER_API_KEY en .env")
     sys.exit(1)
 
+MODEL = os.getenv("MODEL_NAME", "meta-llama/llama-3.2-3b-instruct:free")
+
 print("🔌 Conectando a OpenRouter...")
+print(f"   Modelo: {MODEL}")
+print(f"   API Key: {API_KEY[:15]}...")
 
 try:
     from openrouter import OpenRouter
@@ -31,7 +35,7 @@ try:
             messages=[
                 {"role": "user", "content": "Responde solo con 'BUY' o 'SELL'"}
             ],
-            model="meta-llama/llama-3.2-3b-instruct:free",
+            model=MODEL,
             max_tokens=20
         )
         
@@ -46,9 +50,22 @@ try:
         print(f"📥 Respuesta: {text}")
         
 except Exception as e:
-    print(f"❌ Error: {e}")
-    import traceback
-    traceback.print_exc()
+    print(f"\n❌ Error: {e}")
+    
+    # Mensajes específicos por tipo de error
+    err_str = str(e)
+    if "TooManyRequests" in err_str or "rate_limit" in err_str:
+        print("\n⚠️ El modelo está saturado o alcanzaste el límite.")
+        print("   Prueba en .env con otro modelo:")
+        print("   MODEL_NAME=google/gemma-2-9b-it:free")
+    elif "Provider returned error" in err_str:
+        print("\n⚠️ El proveedor del modelo tiene problemas.")
+        print("   Prueba con otro modelo gratuito.")
+    elif "api_key" in err_str.lower():
+        print("\n⚠️ Revisa tu API key en .env")
+    else:
+        print("\n   Revisa tu cuenta en https://openrouter.ai/credits")
+    
     sys.exit(1)
 
 print("\n✅ Test completado - IA funcionando!")
