@@ -6,7 +6,7 @@ Carga y filtra eventos económicos.
 
 import requests
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from enum import Enum
