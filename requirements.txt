@@ -1,7 +1,10 @@
 # AI Trading Bot - Dependencias
 
-# OpenRouter (IA)
+# OpenRouter (IA) - alternativa a Ollama
 openrouter>=0.1.0
+
+# Ollama (IA local - alternativa a OpenRouter)
+ollama>=0.1.0
 
 # Cliente HTTP (para EA Connector)
 requests>=2.31.0

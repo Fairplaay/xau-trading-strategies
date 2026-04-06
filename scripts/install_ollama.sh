@@ -5,6 +5,9 @@
 
 set -e
 
+MODEL_PRIMARY="gemma4:e2b"
+MODEL_FALLBACK="tinyllama"
+
 echo "============================================"
 echo "🚀 Instalando Ollama + Gemma 4 E2B"
 echo "============================================"
@@ -20,21 +23,30 @@ echo ""
 echo "🔧 Instalando Ollama..."
 curl -fsSL https://ollama.com/install.sh | sh
 
-# 3. Agregar al PATH (si no se agregó automáticamente)
+# 3. Agregar al PATH
 echo ""
 echo "📝 Configurando PATH..."
 echo 'export PATH="$PATH:/usr/local/bin"' >> ~/.bashrc
 export PATH="$PATH:/usr/local/bin"
 
-# 4. Descargar Gemma 4 E2B
+# 4. Descargar modelos
 echo ""
-echo "📥 Descargando Gemma 4 E2B (~4GB)..."
-echo "   Esto puede tomar varios minutos depending on tu internet..."
-ollama pull gemma4:e2b
+echo "📥 Descargando modelos..."
+echo "   Primary: $MODEL_PRIMARY (~4GB)"
+echo "   Fallback: $MODEL_FALLBACK (~400MB)"
+
+# Intentar descargar Gemma 4
+if ollama pull "$MODEL_PRIMARY" 2>/dev/null; then
+    echo "   ✅ $MODEL_PRIMARY descargado"
+else
+    echo "   ⚠️ $MODEL_PRIMARY falló, usando fallback..."
+    ollama pull "$MODEL_FALLBACK"
+    MODEL_PRIMARY="$MODEL_FALLBACK"
+fi
 
 # 5. Verificar instalación
 echo ""
-echo "✅ Verificando instalación..."
+echo "✅ Modelos instalados:"
 ollama list
 
 echo ""
@@ -43,14 +55,9 @@ echo "🎉 Instalación completada!"
 echo "============================================"
 echo ""
 echo "Para usar Gemma 4:"
-echo "  ollama run gemma4:e2b"
+echo "  ollama run $MODEL_PRIMARY"
 echo ""
-echo "Para usar como API (en otro programa):"
+echo "Para usar como API:"
 echo "  ollama serve"
-echo "  # API disponible en http://localhost:11434"
-echo ""
-echo "Para probar desde Python:"
-echo '  import ollama'
-echo '  response = ollama.chat(model="gemma4:e2b", messages=[{"role": "user", "content": "Hola"}])'
-echo '  print(response["message"]["content"])'
+echo "  # API: http://localhost:11434"
 echo ""

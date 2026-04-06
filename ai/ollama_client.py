@@ -8,24 +8,47 @@ import ollama
 from typing import Optional, Dict, Any
 
 
+# Modelos disponibles (fallback chain)
+MODELS = ["gemma4:e2b", "tinyllama", "qwen2:0.5b"]
+
+
 class OllamaClient:
     """Cliente para conectar a Ollama local."""
     
-    def __init__(self, model: str = "gemma4:e2b", base_url: str = "http://localhost:11434"):
-        self.model = model
+    def __init__(self, model: str = None, base_url: str = "http://localhost:11434"):
         self.base_url = base_url
+        
+        # Si no se especifica modelo, usar el primero disponible
+        if model:
+            self.models = [model]
+        else:
+            self.models = MODELS
+        
+        self.current_model = None
         self.client = None
         self._connected = False
     
     def connect(self) -> bool:
         """Inicializa la conexión con Ollama."""
         try:
-            # Verificar que Ollama está corriendo
             import requests
             response = requests.get(f"{self.base_url}/api/tags", timeout=5)
             if response.status_code == 200:
+                # Encontrar primer modelo disponible
+                available = response.json().get("models", [])
+                model_names = [m["name"].split(":")[0] for m in available]
+                
+                for m in self.models:
+                    base = m.split(":")[0]
+                    if any(base in n for n in model_names):
+                        self.current_model = m
+                        break
+                
+                if not self.current_model:
+                    self.current_model = self.models[0]
+                
                 self._connected = True
-                print(f"✅ Conectado a Ollama: {self.model}")
+                print(f"✅ Conectado a Ollama: {self.current_model}")
                 return True
         except Exception as e:
             print(f"❌ Error conectando a Ollama: {e}")
@@ -49,11 +72,11 @@ class OllamaClient:
         # Construir prompt
         prompt = self._build_prompt(market_data, strategy_rules)
         
-        # Reintentar hasta 2 veces
-        for attempt in range(2):
+        # Probar cada modelo hasta que uno funcione
+        for model in self.models:
             try:
                 response = ollama.chat(
-                    model=self.model,
+                    model=model,
                     messages=[
                         {
                             "role": "system",
@@ -84,12 +107,8 @@ Responde SOLO con una palabra: BUY, SELL o NADA"""
                     return "NADA"
                     
             except Exception as e:
-                print(f"⚠️ Intento {attempt+1} falló: {e}")
-                if attempt == 0:
-                    import time
-                    time.sleep(1)
-                    continue
-                return "NADA"
+                print(f"⚠️ Modelo {model} falló: {e}")
+                continue
         
         return "NADA"
     
