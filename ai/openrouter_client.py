@@ -40,11 +40,19 @@ class AITradingClient:
         """Inicializa la conexión con OpenRouter."""
         try:
             self.client = OpenRouter(api_key=self.api_key)
+            # Verificar que funciona
+            test = self.client.chat.send(
+                messages=[{"role": "user", "content": "test"}],
+                model=self.model,
+                max_tokens=1,
+                stream=False
+            )
             self._connected = True
             print(f"✅ Conectado a OpenRouter: {self.model}")
             return True
         except Exception as e:
             print(f"❌ Error conectando a OpenRouter: {e}")
+            self._connected = False
             return False
     
     def initialize_context(self, memory_context: str = "", learnings_context: str = ""):
