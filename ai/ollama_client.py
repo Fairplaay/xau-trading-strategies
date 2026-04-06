@@ -12,13 +12,52 @@ from typing import Optional, Dict, Any
 MODELS = ["qwen2:0.5b", "gemma4:e2b"]
 
 
+# System prompt optimizado para trading profesional
+SYSTEM_PROMPT = """Eres un ANALISTA PROFESIONAL de trading para XAUUSD (oro) en timeframe M1 (1 minuto).
+
+## CONTEXTO
+- Mercado: XAUUSD (XAU/USD)
+- Broker: Vantage International
+- Spread típico: 15-30 pips
+- Horario: 24/5 (lunes-viernes)
+- Tu rol: CONFIRMAR o RECHAZAR señales del sistema de trading
+
+## REGLAS DE DECISIÓN
+
+### CONFIRMAR SELL si:
+- Precio ESTÁ POR DEBAJO de EMA50
+- RSI < 70 (no sobrecompra)
+- Tendencia = BAJISTA o NEUTRAL
+- No hay noticias de alto impacto en ±30 min
+
+### CONFIRMAR BUY si:
+- Precio ESTÁ POR ENCIMA de EMA50
+- RSI > 30 (no sobreventa)
+- Tendencia = ALCISTA o NEUTRAL
+- No hay noticias de alto impacto en ±30 min
+
+### RECHAZAR (NADA) si:
+- RSI en sobrecompra (>70) o sobreventa (<30)
+- Precio muy cerca de EMA50 (dentro de 5 pips = indecisión)
+- Noticia de alto impacto en menos de 30 minutos
+- Spread > 40 pips (anormal)
+- Vela reciente muy pequeña (< 5 pips de rango)
+
+## FORMATO DE RESPUESTA
+ESCRIBE SOLO UNA PALABRA:
+- SELL → Ejecutar venta
+- BUY → Ejecutar compra  
+- NADA → No hacer nada, esperar siguiente vela
+
+NO escribas nada más. Solo SELL, BUY o NADA."""
+
+
 class OllamaClient:
     """Cliente para conectar a Ollama local."""
     
     def __init__(self, model: str = None, base_url: str = "http://localhost:11434"):
         self.base_url = base_url
         
-        # Si no se especifica modelo, usar el primero disponible
         if model:
             self.models = [model]
         else:
@@ -27,21 +66,17 @@ class OllamaClient:
         self.current_model = None
         self.client = None
         self._connected = False
-        self.initial_context = ""
+        self.initial_context = SYSTEM_PROMPT
     
     def initialize_context(self, memory_context: str = "", learnings_context: str = ""):
-        """Carga el contexto inicial (no necesario para Ollama, pero requerido por el bot)."""
-        context = """Eres un scalper profesional de XAU/USD en timeframe M1.
-Buscas operaciones rápidas con SL ajustados.
-Si hay duda, responder NADA.
-Si hay noticia ±30 min → NO OPERAR.
-Responde SOLO con una palabra: BUY, SELL o NADA"""
+        """Carga el contexto inicial."""
+        context = SYSTEM_PROMPT
         
         if memory_context:
-            context += f"\n\n{memory_context}"
+            context += f"\n\nContexto de memoria: {memory_context}"
         
         if learnings_context:
-            context += f"\n\n{learnings_context}"
+            context += f"\n\nAprendizajes: {learnings_context}"
         
         self.initial_context = context
         print(f"📌 Contexto IA cargado ({len(self.initial_context)} chars)")
@@ -52,7 +87,6 @@ Responde SOLO con una palabra: BUY, SELL o NADA"""
             import requests
             response = requests.get(f"{self.base_url}/api/tags", timeout=5)
             if response.status_code == 200:
-                # Encontrar primer modelo disponible
                 available = response.json().get("models", [])
                 model_names = [m["name"].split(":")[0] for m in available]
                 
@@ -70,63 +104,24 @@ Responde SOLO con una palabra: BUY, SELL o NADA"""
                 return True
         except Exception as e:
             print(f"❌ Error conectando a Ollama: {e}")
-            print(f"   Asegúrate de que Ollama esté corriendo: ollama serve")
             return False
     
     def analyze(self, market_data: Dict[str, Any], strategy_rules: str) -> str:
         """
         Analiza datos de mercado y decide señal.
-        
-        Args:
-            market_data: Diccionario con precio, RSI, EMA, ATR, etc.
-            strategy_rules: Reglas de la estrategia activa
-            
-        Returns:
-            "BUY" | "SELL" | "NADA"
         """
         if not self._connected:
             return "NADA"
         
-        # Construir prompt
         prompt = self._build_prompt(market_data, strategy_rules)
         
-        # Probar cada modelo hasta que uno funcione
         for model in self.models:
             try:
                 response = ollama.chat(
                     model=model,
                     messages=[
-                        {
-                            "role": "system",
-                            "content": """Eres un ANALISTA de trading para XAUUSD M1.
- Tu único trabajo es CONFIRMAR o RECHAZAR señales de trading.
- 
- REGLAS:
- 1. Si la estrategia dice SELL y el precio está BAJO el EMA50 → CONFIRMA SELL
- 2. Si la estrategia dice BUY y el precio está SOBRE el EMA50 → CONFIRMA BUY  
- 3. Si el RSI está en sobrecompra (>70) o sobreventa (<30) → RECHAZAR
- 4. Si hay noticia de alto impacto pronto → RECHAZAR
- 
- IMPORTANTE: Responde SOLO con la palabra exacta que corresponda:
- - Si confirmas SELL -> escribe "SELL"
- - Si confirmas BUY -> escribe "BUY"  
- - Si rechazas -> escribe "NADA"
- 
- NADA de explicaciones, NADA de texto adicional."""
-                        },
-                        {
-                            "role": "user",
-                            "content": f"""La estrategia detecta: {strategy_rules.get('direction', 'N/A')}
-
-Datos del mercado:
-- Precio actual: ${market_data.get('price', 'N/A')}
-- EMA50: ${market_data.get('ema50', 'N/A')}
-- EMA200: ${market_data.get('ema200', 'N/A')}
-- RSI: {market_data.get('rsi', 'N/A')}
-- Tendencia: {market_data.get('trend', 'N/A')}
-
-Responde SOLO: SELL, BUY o NADA"""
-                        }
+                        {"role": "system", "content": self.initial_context},
+                        {"role": "user", "content": prompt}
                     ],
                     options={
                         "temperature": 0.0,
@@ -137,11 +132,11 @@ Responde SOLO: SELL, BUY o NADA"""
                 
                 content = response.get("message", {}).get("content", "").strip().upper()
                 
-                print(f"   [IA] Response: {content[:80]}...")
+                print(f"   [IA] Response: {content[:50]}...")
                 
-                # Buscar palabras clave
-                buy_words = ["BUY", "LONG", "CALL", "COMPRAR"]
-                sell_words = ["SELL", "SHORT", "PUT", "VENDER"]
+                # Detectar palabras clave
+                buy_words = ["BUY", "LONG", "CALL"]
+                sell_words = ["SELL", "SHORT", "PUT"]
                 
                 for word in buy_words:
                     if word in content:
@@ -163,20 +158,16 @@ Responde SOLO: SELL, BUY o NADA"""
     
     def _build_prompt(self, market_data: Dict, strategy_rules: str) -> str:
         """Construye el prompt para la IA."""
-        return f"""
-## Datos Actuales del Mercado:
+        return f"""## SEÑAL DEL SISTEMA
+Dirección: {strategy_rules.get('direction', 'N/A')}
+
+## DATOS DEL MERCADO
 - Precio: ${market_data.get('price', 'N/A')}
 - EMA50: ${market_data.get('ema50', 'N/A')}
 - EMA200: ${market_data.get('ema200', 'N/A')}
-- RSI14: {market_data.get('rsi', 'N/A')}
-- ATR14: ${market_data.get('atr', 'N/A')}
+- RSI: {market_data.get('rsi', 'N/A')}
+- ATR: ${market_data.get('atr', 'N/A')}
 - Tendencia: {market_data.get('trend', 'N/A')}
+- Noticias: {market_data.get('news_status', 'Sin noticias')}
 
-## Estrategia Activa:
-{strategy_rules}
-
-## Estado de Noticias:
-{market_data.get('news_status', 'Sin noticias')}
-
-Responde SOLO con una palabra: BUY, SELL o NADA
-"""
+Responde SOLO: SELL, BUY o NADA"""
