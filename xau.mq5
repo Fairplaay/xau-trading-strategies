@@ -304,7 +304,7 @@ void WriteData()
    FileWriteString(h, "  \"symbol\":\"" + _Symbol + "\",\n");
    FileWriteString(h, "  \"bid\":" + DoubleToString(bid, 2) + ",\n");
    FileWriteString(h, "  \"ask\":" + DoubleToString(ask, 2) + ",\n");
-   FileWriteString(h, "  \"spread\":" + spr + ",\n");
+   FileWriteString(h, "  \"spread\":" + IntegerToString(spr) + ",\n");
    FileWriteString(h, "  \"rsi14\":" + DoubleToString(rsi[0], 1) + ",\n");
    FileWriteString(h, "  \"ema50\":" + DoubleToString(ema50[0], 2) + ",\n");
    FileWriteString(h, "  \"ema200\":" + DoubleToString(ema200[0], 2) + ",\n");
