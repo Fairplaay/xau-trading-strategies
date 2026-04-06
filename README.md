@@ -54,25 +54,27 @@ Esto te mostrará los IDs exactos para poner en `MODEL_NAME`.
 
 ## 🚀 Uso
 
-### Ver estrategias disponibles:
-```bash
-python bot.py --list-strategies
-```
+### Modo EA File (recomendado - sin MT5 directo)
 
-### Ejecutar con una estrategia:
+El bot se comunica con el EA via archivos JSON:
+- **EA → Bot**: Escribe `xau_data.json` (precio, indicadores, velas)
+- **Bot → EA**: Escribe `xau_commands.json` (órdenes BUY/SELL/CLOSE)
+
 ```bash
-# Estrategia EMA/RSI (default)
+# En tu archivo .env:
+USE_EA_FILE=true
+#EA_FILE_PATH=  # opcional, ruta de los archivos
+
+# Ejecutar el bot
 python bot.py --strategy EMARSI
-
-# Estrategia Structure
-python bot.py --strategy STRUCTURE
 ```
 
-### Con MT5 automático (agrega a .env):
-```bash
-MT5_ACCOUNT=12345678
-MT5_PASSWORD=tu_password
-MT5_SERVER=TuBroker-Server
+### Modo MT5 directo (requiere mt5linux en Linux)</```bash
+#MT5_ACCOUNT=12345678
+#MT5_PASSWORD=tu_password
+#MT5_SERVER=YourServer
+
+python bot.py --strategy EMARSI
 ```
 
 ## 🧠 Modelos (DEFAULT)

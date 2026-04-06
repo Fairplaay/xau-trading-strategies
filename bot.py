@@ -74,16 +74,24 @@ class TradingBot:
             return False
         print(f"   {self.strategy.description}")
         
-        # 5. Conectar a MT5
-        print("\n🔌 Conectando a MetaTrader 5...")
-        self.mt5 = MT5Connector()
-        if not self.mt5.connect(
-            login=self.config.MT5_ACCOUNT,
-            password=self.config.MT5_PASSWORD,
-            server=self.config.MT5_SERVER
-        ):
-            print("❌ No se pudo conectar a MT5")
-            return False
+        # 5. Conectar a MT5 o EA File
+        if self.config.USE_EA_FILE:
+            print("\n📁 Conectando al EA via archivos...")
+            from mt5.ea_connector import EAConnector
+            self.mt5 = EAConnector(data_dir=self.config.EA_FILE_PATH if self.config.EA_FILE_PATH else None)
+            if not self.mt5.connect():
+                print("❌ No se pudo conectar al archivo del EA")
+                return False
+        else:
+            print("\n🔌 Conectando a MetaTrader 5...")
+            self.mt5 = MT5Connector()
+            if not self.mt5.connect(
+                login=self.config.MT5_ACCOUNT,
+                password=self.config.MT5_PASSWORD,
+                server=self.config.MT5_SERVER
+            ):
+                print("❌ No se pudo conectar a MT5")
+                return False
         
         print("\n✅ Inicialización completa!")
         

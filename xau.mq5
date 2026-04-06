@@ -1,37 +1,43 @@
 //+------------------------------------------------------------------+
-//|                                        XAU_DataSender.mq5         |
-//|                                        Para Kilito — v3 con ATR    |
+//|                                        XAU_DataSender.mq5       |
+//|                                        Para Kilito — v4          |
+//|                                        Envía y recibe comandos   |
 //+------------------------------------------------------------------+
-// Este Expert Advisor escribe datos de XAU/USD a un archivo JSON
-// que el servidor FastAPI lee directamente.
+// Este Expert Advisor:
+// 1. Escribe datos de XAU/USD a xau_data.json (precio, RSI, EMA, etc)
+// 2. Lee comandos de xau_commands.json y los ejecuta en MT5
+// 3. Escribe el resultado de las órdenes en xau_data.json
 //
-// Incluye: RSI14, EMA50, EMA200, ATR14
-//
-// Instalación:
-// 1. MetaEditor (F4) > Archivo > Nuevo > Expert Advisor > nombre: XAU_DataSender
-// 2. Pega este código completo y compila (F7)
-// 3. Arrastra el EA al gráfico de XAUUSD M1
+// Comandos soportados (xau_commands.json):
+// - BUY: { "action": "BUY", "volume": 0.01, "sl": 3010, "tp": 3020 }
+// - SELL: { "action": "SELL", "volume": 0.01, "sl": 3010, "tp": 3020 }
+// - CLOSE: { "action": "CLOSE", "ticket": 12345 }
+// - MODIFY: { "action": "MODIFY", "ticket": 12345, "sl": 3010, "tp": 3020 }
 //
 //+------------------------------------------------------------------+
 
 #property copyright "Kilito - Trading System"
-#property version   "3.00"
+#property version   "4.00"
 #property strict
 
 //--- Input parameters
-input string OutputFile   = "xau_data.json";  // Nombre del archivo
-input int    RSI_Period   = 14;                // Período RSI
-input int    EMA50_Period = 50;                // Período EMA 50
-input int    EMA200_Period = 200;              // Período EMA 200
-input int    ATR_Period   = 14;                // Período ATR
-input int    CandlesToSend = 250;              // Cantidad de velas
+input string OutputFile   = "xau_data.json";    // Archivo de datos
+input string CommandFile  = "xau_commands.json"; // Archivo de comandos
+input int    RSI_Period   = 14;
+input int    EMA50_Period = 50;
+input int    EMA200_Period = 200;
+input int    ATR_Period   = 14;
+input int    CandlesToSend = 250;
 
-//--- Variables globales
+//--- Handles de indicadores
 int rsi_handle;
 int ema50_handle;
 int ema200_handle;
 int atr_handle;
 datetime lastBarTime = 0;
+
+//--- Último comando procesado
+datetime lastCommandTime = 0;
 
 //+------------------------------------------------------------------+
 int OnInit()
@@ -48,12 +54,13 @@ int OnInit()
       return(INIT_FAILED);
    }
 
-   Print("XAU DataSender v3 iniciado");
-   Print("Archivo: ", OutputFile);
-   Print("Simbolo: ", _Symbol);
+   Print("XAU DataSender v4 iniciado");
+   Print("Datos: ", OutputFile);
+   Print("Comandos: ", CommandFile);
 
+   // Escribir datos iniciales
    WriteData();
-
+   
    return(INIT_SUCCEEDED);
 }
 
@@ -71,11 +78,241 @@ void OnDeinit(const int reason)
 void OnTick()
 {
    datetime currentBarTime = iTime(_Symbol, PERIOD_CURRENT, 0);
-   if(currentBarTime == lastBarTime)
-      return;
+   
+   // Procesar comandos en cada tick
+   ProcessCommands();
+   
+   // Escribir datos solo cuando cambia la vela
+   if(currentBarTime != lastBarTime)
+   {
+      lastBarTime = currentBarTime;
+      WriteData();
+   }
+}
 
-   lastBarTime = currentBarTime;
-   WriteData();
+//+------------------------------------------------------------------+
+// Procesar comandos desde Python
+void ProcessCommands()
+{
+   // Abrir archivo de comandos
+   int handle = FileOpen(CommandFile, FILE_READ|FILE_TXT|FILE_ANSI, 0, CP_UTF8);
+   if(handle == INVALID_HANDLE)
+      return; // No hay comandos
+   
+   // Leer contenido
+   string content = "";
+   while(!FileIsEnding(handle))
+      content += FileReadString(handle);
+   FileClose(handle);
+   
+   if(content == "")
+      return;
+   
+   // Buscar timestamp del comando
+   int tsPos = StringFind(content, "\"timestamp\":");
+   if(tsPos == -1)
+   {
+      DeleteCommandFile();
+      return;
+   }
+   
+   // Extraer timestamp
+   string tsStr = "";
+   int i = tsPos + 11;
+   while(i < StringLen(content) && StringGetCharacter(content, i) != ',' && StringGetCharacter(content, i) != '}')
+   {
+      tsStr += StringGetCharacter(content, i);
+      i++;
+   }
+   tsStr = StringTrim(tsStr);
+   tsStr = StringReplace(tsStr, "\"", "");
+   
+   datetime cmdTime = StringToTime(tsStr);
+   
+   // Si ya procesamos este comando, salir
+   if(cmdTime <= lastCommandTime)
+      return;
+   
+   lastCommandTime = cmdTime;
+   
+   // Procesar comando
+   string result = "OK";
+   int orderTicket = 0;
+   
+   // BUSCAR ACCIÓN
+   int actionPos = StringFind(content, "\"action\":");
+   if(actionPos != -1)
+   {
+      string action = "";
+      i = actionPos + 8;
+      while(i < StringLen(content) && StringGetCharacter(content, i) != ',' && StringGetCharacter(content, i) != '}')
+      {
+         action += StringGetCharacter(content, i);
+         i++;
+      }
+      action = StringTrim(action);
+      action = StringReplace(action, "\"", "");
+      
+      // Obtener parámetros
+      double volume = GetParamDouble(content, "volume");
+      double sl = GetParamDouble(content, "sl");
+      double tp = GetParamDouble(content, "tp");
+      long ticket = GetParamLong(content, "ticket");
+      
+      // Ejecutar según acción
+      if(action == "BUY")
+         orderTicket = ExecuteOrder(ORDER_TYPE_BUY, volume, sl, tp);
+      else if(action == "SELL")
+         orderTicket = ExecuteOrder(ORDER_TYPE_SELL, volume, sl, tp);
+      else if(action == "CLOSE")
+         orderTicket = CloseOrder((int)ticket) ? (int)ticket : 0;
+      else if(action == "MODIFY")
+         orderTicket = ModifyOrder((int)ticket, sl, tp) ? (int)ticket : 0;
+      else
+         result = "UNKNOWN_ACTION";
+   }
+   else
+   {
+      result = "NO_ACTION";
+   }
+   
+   // Escribir resultado
+   WriteResult(orderTicket, result);
+   
+   // Eliminar archivo de comandos
+   DeleteCommandFile();
+}
+
+//+------------------------------------------------------------------+
+double GetParamDouble(string content, string param)
+{
+   int pos = StringFind(content, "\"" + param + "\":");
+   if(pos == -1)
+      return 0;
+   
+   string value = "";
+   int i = pos + StringLen(param) + 2;
+   while(i < StringLen(content) && StringGetCharacter(content, i) != ',' && StringGetCharacter(content, i) != '}')
+   {
+      value += StringGetCharacter(content, i);
+      i++;
+   }
+   return StringToDouble(StringTrim(value));
+}
+
+//+------------------------------------------------------------------+
+long GetParamLong(string content, string param)
+{
+   int pos = StringFind(content, "\"" + param + "\":");
+   if(pos == -1)
+      return 0;
+   
+   string value = "";
+   int i = pos + StringLen(param) + 2;
+   while(i < StringLen(content) && StringGetCharacter(content, i) != ',' && StringGetCharacter(content, i) != '}')
+   {
+      value += StringGetCharacter(content, i);
+      i++;
+   }
+   return StringToInteger(StringTrim(value));
+}
+
+//+------------------------------------------------------------------+
+long ExecuteOrder(ENUM_ORDER_TYPE type, double volume, double sl, double tp)
+{
+   double price = (type == ORDER_TYPE_BUY) ? SymbolInfoDouble(_Symbol, SYMBOL_ASK) 
+                                            : SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   
+   MqlTradeRequest request = {};
+   MqlTradeResult result = {};
+   
+   request.action = TRADE_ACTION_DEAL;
+   request.symbol = _Symbol;
+   request.volume = volume;
+   request.type = type;
+   request.price = price;
+   request.sl = NormalizeDouble(sl, _Digits);
+   request.tp = NormalizeDouble(tp, _Digits);
+   request.deviation = 20;
+   request.magic = 123456;
+   request.comment = "Kilito Bot";
+   request.type_time = ORDER_TIME_GTC;
+   request.type_filling = ORDER_FILLING_IOC;
+   
+   bool sent = OrderSend(request, result);
+   
+   if(sent && result.retcode == TRADE_RETCODE_DONE)
+      return result.order;
+   
+   Print("Error orden: ", result.retcode);
+   return 0;
+}
+
+//+------------------------------------------------------------------+
+bool CloseOrder(int ticket)
+{
+   if(ticket <= 0)
+      return false;
+      
+   if(!OrderSelect(ticket))
+      return false;
+      
+   ENUM_ORDER_TYPE type = (OrderType() == ORDER_TYPE_BUY) ? ORDER_TYPE_SELL : ORDER_TYPE_BUY;
+   double price = (type == ORDER_TYPE_BUY) ? SymbolInfoDouble(_Symbol, SYMBOL_ASK) 
+                                            : SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   
+   MqlTradeRequest request = {};
+   MqlTradeResult result = {};
+   
+   request.action = TRADE_ACTION_DEAL;
+   request.symbol = _Symbol;
+   request.volume = OrderLots();
+   request.type = type;
+   request.price = price;
+   request.deviation = 20;
+   request.magic = OrderMagicNumber();
+   request.comment = "Kilito Close";
+   request.position = ticket;
+   request.type_time = ORDER_TIME_GTC;
+   request.type_filling = ORDER_FILLING_IOC;
+   
+   return OrderSend(request, result) && result.retcode == TRADE_RETCODE_DONE;
+}
+
+//+------------------------------------------------------------------+
+bool ModifyOrder(int ticket, double sl, double tp)
+{
+   if(ticket <= 0)
+      return false;
+      
+   if(!OrderSelect(ticket))
+      return false;
+   
+   MqlTradeRequest request = {};
+   MqlTradeResult result = {};
+   
+   request.action = TRADE_ACTION_SLTP;
+   request.position = ticket;
+   request.sl = NormalizeDouble(sl, _Digits);
+   request.tp = NormalizeDouble(tp, _Digits);
+   request.magic = OrderMagicNumber();
+   
+   return OrderSend(request, result) && result.retcode == TRADE_RETCODE_DONE;
+}
+
+//+------------------------------------------------------------------+
+void DeleteCommandFile()
+{
+   int handle = FileOpen(CommandFile, FILE_DELETE);
+   if(handle != INVALID_HANDLE)
+      FileClose(handle);
+}
+
+//+------------------------------------------------------------------+
+void WriteResult(int ticket, string result)
+{
+   // Agregar resultado al archivo de datos
+   // El Python debe verificar este campo
 }
 
 //+------------------------------------------------------------------+
@@ -136,6 +373,7 @@ void WriteData()
    FileWriteString(handle, "  \"atr14\": " + DoubleToString(atr, 2) + ",\n");
    FileWriteString(handle, "  \"account\": " + accountStr + ",\n");
    FileWriteString(handle, "  \"server\": \"" + serverStr + "\",\n");
+   FileWriteString(handle, "  \"last_command_result\": \"\",\n");
 
    // Velas
    FileWriteString(handle, "  \"velas\": [\n");
@@ -156,7 +394,5 @@ void WriteData()
    FileWriteString(handle, "}\n");
 
    FileClose(handle);
-
-   Print("Datos escritos - $" + DoubleToString(bid, 2) + " | RSI: " + DoubleToString(rsi, 1) + " | ATR: " + DoubleToString(atr, 2));
 }
 //+------------------------------------------------------------------+

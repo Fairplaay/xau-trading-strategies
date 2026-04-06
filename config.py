@@ -40,6 +40,10 @@ class Config:
     # News API
     FOREXFACTORY_URL: str = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
     
+    # EA File Connector (lee xau_data.json y escribe xau_commands.json)
+    USE_EA_FILE: bool = os.getenv("USE_EA_FILE", "false").lower() == "true"
+    EA_FILE_PATH: str = os.getenv("EA_FILE_PATH", "")  # opcional
+    
     @classmethod
     def validate(cls) -> bool:
         """Valida que las variables obligatorias estén configuradas."""
