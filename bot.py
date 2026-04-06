@@ -64,16 +64,26 @@ class TradingBot:
         if not self.news.load():
             print("⚠️ No se pudo cargar calendario, continuando sin filtro...")
         
-        # 3. Conectar a OpenRouter (IA)
-        print("\n🤖 Conectando a OpenRouter...")
-        self.ai = AITradingClient(
-            api_key=self.config.OPENROUTER_API_KEY,
-            model=self.config.MODEL_NAME,
-            temperature=self.config.TEMPERATURE,
-            max_tokens=self.config.MAX_TOKENS
-        )
-        if not self.ai.connect():
-            print("⚠️ No se pudo conectar a IA, continuando sin análisis...")
+        # 3. Conectar a IA (Ollama primero, luego OpenRouter)
+        print("\n🤖 Conectando a IA...")
+        
+        # Intentar Ollama primero
+        from ai.ollama_client import OllamaClient
+        self.ai = OllamaClient()
+        if self.ai.connect():
+            print(f"✅ IA conectada (Ollama: {self.ai.current_model})")
+        else:
+            # Fallback a OpenRouter
+            print("⚠️ Ollama no disponible, usando OpenRouter...")
+            from ai.openrouter_client import AITradingClient
+            self.ai = AITradingClient(
+                api_key=self.config.OPENROUTER_API_KEY,
+                model=self.config.MODEL_NAME,
+                temperature=self.config.TEMPERATURE,
+                max_tokens=self.config.MAX_TOKENS
+            )
+            if not self.ai.connect():
+                print("⚠️ No se pudo conectar a IA, continuando sin análisis...")
         
         # 4. Cargar estrategia
         print(f"\n📊 Cargando estrategia: {self.strategy_name}")
