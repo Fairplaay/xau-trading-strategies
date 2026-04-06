@@ -27,6 +27,26 @@ class OllamaClient:
         self.current_model = None
         self.client = None
         self._connected = False
+        self.initial_context = ""
+    
+    def initialize_context(self, memory_context: str = "", learnings_context: str = ""):
+        """
+        Carga el contexto inicial (no necesario para Ollama, pero requerido por el bot).
+        """
+        context = """Eres un scalper profesional de XAU/USD en timeframe M1.
+Buscas operaciones rápidas con SL ajustados.
+Si hay duda, responder NADA.
+Si hay noticia ±30 min → NO OPERAR.
+Responde SOLO con una palabra: BUY, SELL o NADA"""
+        
+        if memory_context:
+            context += f"\n\n{memory_context}"
+        
+        if learnings_context:
+            context += f"\n\n{learnings_context}"
+        
+        self.initial_context = context
+        print(f"📌 Contexto IA cargado ({len(self.initial_context)} chars)")
     
     def connect(self) -> bool:
         """Inicializa la conexión con Ollama."""
