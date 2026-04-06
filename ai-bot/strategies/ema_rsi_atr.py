@@ -9,12 +9,12 @@ from .base import BaseStrategy, Signal, register_strategy
 
 
 @register_strategy
-class EMARSIATRStrategy(BaseStrategy):
+class EMARSI(BaseStrategy):
     """Estrategia EMA + RSI + ATR."""
     
     @property
     def name(self) -> str:
-        return "EMA/RSI/ATR"
+        return "EMA-RSI"
     
     @property
     def description(self) -> str:

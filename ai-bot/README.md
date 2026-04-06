@@ -45,10 +45,10 @@ python bot.py --list-strategies
 ### Ejecutar con una estrategia:
 ```bash
 # Estrategia EMA/RSI/ATR (default)
-python bot.py --strategy EMARSIATRStrategy
+python bot.py --strategy EMARSI
 
 # Estrategia Price Structure
-python bot.py --strategy PriceStructureStrategy
+python bot.py --strategy STRUCTURE
 ```
 
 ### Con MT5 automático (agrega a .env):

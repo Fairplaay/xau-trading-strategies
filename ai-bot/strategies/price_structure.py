@@ -9,7 +9,7 @@ from .base import BaseStrategy, Signal, register_strategy
 
 
 @register_strategy
-class PriceStructureStrategy(BaseStrategy):
+class STRUCTURE(BaseStrategy):
     """Estrategia basada en estructura de precio."""
     
     @property

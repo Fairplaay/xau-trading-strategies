@@ -23,7 +23,7 @@ from strategies import get_strategy, list_strategies
 class TradingBot:
     """Bot de trading automatizado."""
     
-    def __init__(self, strategy_name: str = "EMARSIATRStrategy"):
+    def __init__(self, strategy_name: str = "EMARSI"):
         self.strategy_name = strategy_name
         self.running = False
         
@@ -307,8 +307,8 @@ def main():
     parser.add_argument(
         "--strategy",
         type=str,
-        default="EMARSIATRStrategy",
-        choices=list(STRATEGY_REGISTRY.keys()),
+        default="EMARSI",
+        choices=["EMARSI", "STRUCTURE"],
         help="Estrategia a usar"
     )
     parser.add_argument(
