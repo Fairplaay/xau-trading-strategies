@@ -25,4 +25,7 @@ npm-debug.log*
 
 # MT5
 *.ex5
-*.ex4
+*.ex4-e 
+# Test scripts
+test_ia.py
+test_*.py
