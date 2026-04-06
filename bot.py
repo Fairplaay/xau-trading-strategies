@@ -378,7 +378,6 @@ class TradingBot:
                     print(f"⏳ [{datetime.now().strftime('%H:%M:%S')}] Sin señal - {market_data.get('trend', 'N/A')} | RSI: {market_data.get('rsi', 0):.1f}")
                 
                 # Esperar hasta el segundo 55 del siguiente minuto
-                from datetime import datetime
                 now = datetime.now()
                 wait = 55 - now.second
                 if wait <= 0:
