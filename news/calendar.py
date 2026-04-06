@@ -91,9 +91,13 @@ class NewsCalendar:
     
     def _parse_date(self, date_str: str) -> Optional[datetime]:
         """Parsea string de fecha de ForexFactory."""
-        # Formato: "Apr 05, 2025 08:30am EST"
         try:
-            # Limpiar timezone
+            # Nuevo formato ISO: "2026-04-05T05:15:00-04:00"
+            if "T" in date_str and "-" in date_str:
+                # Parsear ISO 8601
+                return datetime.fromisoformat(date_str)
+            
+            # Formato antiguo: "Apr 05, 2025 08:30am EST"
             date_str = date_str.replace(" EST", "").replace(" EDT", "")
             dt = datetime.strptime(date_str, "%b %d, %Y %I:%M%p")
             # Asumir timezone EST/EDT (UTC-5/UTC-4)
