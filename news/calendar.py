@@ -111,7 +111,7 @@ class NewsCalendar:
         if not self._loaded:
             return []
         
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         future = now + timedelta(minutes=minutes)
         
         upcoming = []
@@ -129,7 +129,7 @@ class NewsCalendar:
     
     def get_block_status(self) -> Dict:
         """Retorna el estado de bloqueo por noticias."""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         
         # Alta impacto en próximas 30 min
         high = self.get_upcoming(30, currencies=["USD", "EUR", "GBP"])
