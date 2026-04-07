@@ -44,7 +44,42 @@ class Trainer:
         self.feature_names = None
         self.is_trained = False
     
-    def train_from_json(self, json_path: str, test_size: float = 0.2) -> dict:
+    def _find_data_file(self, json_path: str = None) -> Optional[str]:
+        """Buscar archivo xau_data.json en múltiples ubicaciones."""
+        import os
+        import glob
+        from pathlib import Path
+        
+        # Si ya nos pasaron una ruta y existe, usarla
+        if json_path and os.path.exists(json_path):
+            return json_path
+        
+        # Rutas de búsqueda
+        search_paths = [
+            "xau_data.json",
+            os.path.expanduser("~/Documentos/trading/xau_data.json"),
+            os.path.expanduser("~/.wine/drive_c/Program Files/Vantage International MT5/MQL5/Files/xau_data.json"),
+            os.path.expanduser("~/.wine/drive_c/Program Files/MetaTrader 5/MQL5/Files/xau_data.json"),
+        ]
+        
+        for path in search_paths:
+            if os.path.exists(path):
+                return path
+        
+        # Buscar en Wine con glob
+        home = os.path.expanduser("~")
+        wine_patterns = [
+            os.path.join(home, ".wine", "drive_c", "Program Files", "Vantage International MT5", "MQL5", "Files", "xau_data.json"),
+            os.path.join(home, ".wine", "drive_c", "Program Files", "MetaTrader 5", "MQL5", "Files", "xau_data.json"),
+        ]
+        
+        for pattern in wine_patterns:
+            if os.path.exists(pattern):
+                return pattern
+        
+        return None
+    
+    def train_from_json(self, json_path: str = None, test_size: float = 0.2) -> dict:
         """
         Entrenar modelo desde archivo JSON con datos históricos.
         
@@ -60,7 +95,14 @@ class Trainer:
         if self.label_strategy not in LABEL_STRATEGIES:
             raise ValueError(f"Estrategia desconocida: {self.label_strategy}")
         
-        # Cargar datos
+        # Cargar datos - buscar en múltiples ubicaciones
+        json_path = self._find_data_file(json_path)
+        
+        if not json_path:
+            raise ValueError(f"No se encontró {json_path}")
+        
+        print(f"📂 Cargando desde: {json_path}")
+        
         with open(json_path, 'r') as f:
             data = json.load(f)
         
