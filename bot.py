@@ -364,14 +364,75 @@ class TradingBot:
         return {"blocked": False, "level": "NONE"}
     
     def calculate_sl_tp(self, direction: str, price: float, atr: float) -> dict:
-        """Calcular SL y TP."""
+        """Calcular SL y TP con profit adaptativo basado en ATR."""
+        # SL: siempre 1.5x ATR (mínimo $0.25)
         sl_distance = max(0.25, min(atr * 1.5, 1.0))
-        tp_distance = max(0.25, min(atr * 1.0, 2.0))
+        
+        # TP: adaptativo - 1.5x ATR (más flexible que fijo $0.50)
+        tp_distance = max(0.25, min(atr * 1.5, 2.0))
         
         if direction == "BUY":
             return {"sl": price - sl_distance, "tp": price + tp_distance}
         else:
             return {"sl": price + sl_distance, "tp": price - tp_distance}
+    
+    def update_trailing_sl(self, position_status: dict) -> bool:
+        """Actualizar SL móvil (Trailing Stop)"""
+        if not position_status.get("has_position"):
+            return False
+        
+        profit = position_status.get("profit", 0)
+        current_sl = position_status.get("sl", 0)
+        open_price = position_status.get("open_price", 0)
+        ticket = position_status.get("ticket", 0)
+        pos_type = position_status.get("type", "SELL")
+        
+        new_sl = current_sl
+        
+        # Trailing SL rules
+        if profit >= 2.00:
+            # Mover SL a +$1.00 a favor
+            if pos_type == "BUY":
+                new_sl = open_price + 1.00
+            else:
+                new_sl = open_price - 1.00
+        elif profit >= 1.25:
+            # Mover SL a +$0.50 a favor
+            if pos_type == "BUY":
+                new_sl = open_price + 0.50
+            else:
+                new_sl = open_price - 0.50
+        elif profit >= 0.75:
+            # Mover SL a breakeven (precio de entrada)
+            new_sl = open_price
+        
+        # Solo actualizar si el nuevo SL es mejor
+        if new_sl != current_sl:
+            if pos_type == "BUY" and new_sl > current_sl:
+                self.mt5.modify(ticket, new_sl, position_status.get("tp", 0))
+                print(f"📈 Trailing SL actualizado: ${new_sl:.2f}")
+                return True
+            elif pos_type == "SELL" and new_sl < current_sl:
+                self.mt5.modify(ticket, new_sl, position_status.get("tp", 0))
+                print(f"📉 Trailing SL actualizado: ${new_sl:.2f}")
+                return True
+        
+        return False
+    
+    def should_close_on_opposite(self, position_status: dict, new_prediction: str) -> bool:
+        """Determinar si cerrar por señal opuesta"""
+        if not position_status.get("has_position"):
+            return False
+        
+        current_type = position_status.get("type", "")
+        
+        # BUY vs SELL son opuestos
+        if current_type == "BUY" and new_prediction == "SELL":
+            return True
+        if current_type == "SELL" and new_prediction == "BUY":
+            return True
+        
+        return False
     
     def run(self, train_mode: bool = False):
         """Loop principal."""
@@ -413,16 +474,26 @@ class TradingBot:
                           f"Posiciónabierta: {position_status['type']} | "
                           f"Profit: ${position_status['profit']:.2f}")
                     
+                    # 1. Verificar Trailing SL
+                    self.update_trailing_sl(position_status)
+                    
+                    # 2. Verificar si cerró por SL/TP
                     if position_status["closed"]:
                         print(f"✅ Posicióncerrada: {position_status['close_reason']}")
                         self.position_state = "IDLE"
                         self.last_order_time = time.time()
                     
-                    elif position_status["profit"] >= self.min_profit:
-                        print(f"🎯 Profit objetivo alcanzado, cerrando...")
-                        self.close_position(position_status["ticket"])
-                        self.position_state = "IDLE"
-                        self.last_order_time = time.time()
+                    # 3. Verificar profit objetivo (adaptativo basado en ATR)
+                    else:
+                        current_price = self.get_market_data().get("price", 0)
+                        atr = self.get_market_data().get("atr", 0.5)
+                        target_profit = atr * 1.5  # Adaptativo: ATR × 1.5
+                        
+                        if position_status["profit"] >= target_profit:
+                            print(f"🎯 Profit objetivo ({target_profit:.2f}) alcanzado, cerrando...")
+                            self.close_position(position_status["ticket"])
+                            self.position_state = "IDLE"
+                            self.last_order_time = time.time()
                     
                     time.sleep(55)
                     continue
@@ -458,6 +529,14 @@ class TradingBot:
                 # 3. Predecir con ML
                 rates = market_data.pop("rates", None)
                 prediction = self.predictor.predict(market_data, rates)
+                
+                # 4. Verificar Close on Opposite (si hay posición yML dice lo contrario)
+                if position_status.get("has_position"):
+                    if self.should_close_on_opposite(position_status, prediction):
+                        print(f"🔄 Señal opuesta detectada: {position_status['type']} → {prediction}")
+                        print(f"   Cerrando posición y abriendo nueva...")
+                        self.close_position(position_status["ticket"])
+                        # Continuar para abrir nueva posición
                 
                 if prediction == "NADA":
                     print(f"⏳ [{datetime.now().strftime('%H:%M:%S')}] "
