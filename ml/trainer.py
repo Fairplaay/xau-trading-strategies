@@ -64,7 +64,20 @@ class Trainer:
         with open(json_path, 'r') as f:
             data = json.load(f)
         
-        rates = data.get('rates', [])
+        rates = data.get('rates', data.get('velas', []))
+        
+        # Convertir formato velas si es necesario (del EA)
+        if rates and isinstance(rates[0], dict):
+            rates = [[
+                int(d['t'].replace('.', '').replace(':', '').replace(' ', '')),  # time
+                d['o'],  # open
+                d['h'],  # high
+                d['l'],  # low
+                d['c'],  # close
+                0,  # tick_volume (no disponible en EA)
+                0,  # spread (no disponible en EA, usar 0)
+                0,  # real_volume (no disponible en EA)
+            ] for d in rates]
         
         if not rates or len(rates) < 100:
             raise ValueError(f"Datos insuficientes: {len(rates)} velas (mínimo 100)")
@@ -168,7 +181,7 @@ class Trainer:
     
     def _create_labels(self, rates: List[List]) -> List[str]:
         """Crear labels según la estrategia seleccionada."""
-        if self.label_strategy == 'ema_rsi':
+        if self.label_strategy in ('ema_rsi', 'emas'):
             return self._create_labels_ema_rsi(rates)
         elif self.label_strategy == 'price_structure':
             return self._create_labels_price_structure(rates)

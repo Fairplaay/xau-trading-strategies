@@ -81,8 +81,9 @@ class Predictor:
                     features.append(0)
                 features = features[:len(self.feature_names)]
             
-            # Convertir a array 2D para sklearn
-            X = np.array([features])
+            # Convertir a DataFrame con nombres de features (evita warning de sklearn)
+            import pandas as pd
+            X = pd.DataFrame([features], columns=self.feature_names)
             
             # Predecir
             prediction = self.model.predict(X)[0]
@@ -127,7 +128,7 @@ class Predictor:
                     features.append(0)
                 features = features[:len(self.feature_names)]
             
-            X = np.array([features])
+            X = pd.DataFrame([features], columns=self.feature_names)
             
             # Predicción
             prediction = self.model.predict(X)[0]

@@ -313,20 +313,20 @@ class TradingBot:
                 
                 # 3. Predecir con ML
                 rates = market_data.pop("rates", None)
-                signal = self.predictor.predict(market_data, rates)
+                prediction = self.predictor.predict(market_data, rates)
                 
-                if signal == "NADA":
+                if prediction == "NADA":
                     print(f"⏳ [{datetime.now().strftime('%H:%M:%S')}] "
                           f"Sin señal - {market_data.get('trend', 'N/A')} | "
                           f"RSI: {market_data.get('rsi', 0):.1f}")
                 else:
                     # 4. Ejecutar orden
-                    print(f"\n🚨 SEÑAL: {signal}")
+                    print(f"\n🚨 SEÑAL: {prediction}")
                     print(f"   Precio: ${market_data.get('price', 0):.2f}")
                     
                     # Calcular SL/TP
                     sl_tp = self.calculate_sl_tp(
-                        signal,
+                        prediction,
                         market_data.get('price', 0),
                         market_data.get('atr', 0.5)
                     )
@@ -334,19 +334,19 @@ class TradingBot:
                     # Enviar orden
                     result = self.mt5.send_order(
                         symbol=Config.SYMBOL,
-                        order_type=signal,
+                        order_type=prediction,
                         volume=Config.VOLUME,
                         deviation=Config.DEVIATION,
                         sl=sl_tp["sl"],
                         tp=sl_tp["tp"],
-                        comment=f"ML - {signal}"
+                        comment=f"ML - {prediction}"
                     )
                     
                     if result and result.get("success"):
                         print(f"✅ Orden ejecutada!")
                         if self.memory:
                             self.memory.add_operation(
-                                direction=signal,
+                                direction=prediction,
                                 symbol=Config.SYMBOL,
                                 pnl="pendiente"
                             )
