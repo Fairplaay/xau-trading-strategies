@@ -12,20 +12,16 @@ class Features:
     """Crea features para el modelo ML (version vectorizada rapida)."""
     
     def __init__(self):
-        # Los 21 features (todos los que calcula)
+        # Features SIN leakage (solo indicadores técnicos)
         self.feature_names = [
-            # Originales (6)
+            # Indicadores técnicos (no revelan dirección futura)
             'rsi',
             'ema50_position',
             'ema200_position',
             'ema50_ema200_diff',
             'atr',
             'trend',
-            # Nuevos (15)
-            'return_1d',
-            'return_5d',
-            'volatility_5',
-            'volatility_15',
+            # Solo indicadores, NO returns/momentum
             'macd',
             'macd_signal',
             'bb_upper',
@@ -34,7 +30,6 @@ class Features:
             'stoch_k',
             'stoch_d',
             'adx',
-            'momentum_5',
             'hour_of_day',
             'day_of_week',
         ]
@@ -124,7 +119,7 @@ class Features:
         close_series = df['close']
         
         features_df = pd.DataFrame({
-            # Originales
+            # Indicadores técnicos (sin leakage)
             'rsi': df['rsi'],
             'ema50_position': close_series - df['ema50'],
             'ema200_position': close_series - df['ema200'],
@@ -132,11 +127,7 @@ class Features:
             'atr': df['atr'],
             'trend': (close_series > df['ema200']).astype(int),
             
-            # Nuevos
-            'return_1d': df['return_1d'],
-            'return_5d': df['return_5d'],
-            'volatility_5': df['volatility_5'],
-            'volatility_15': df['volatility_15'],
+            # Otros indicadores (sin returns/momentum que causan leakage)
             'macd': df['macd'],
             'macd_signal': df['macd_signal'],
             'bb_upper': df['bb_upper'],
@@ -145,7 +136,6 @@ class Features:
             'stoch_k': df['stoch_k'],
             'stoch_d': df['stoch_d'],
             'adx': df['adx'],
-            'momentum_5': df['momentum_5'],
             'hour_of_day': df['hour_of_day'],
             'day_of_week': df['day_of_week'],
         })
@@ -207,7 +197,7 @@ class Features:
         return dx.fillna(25).values
     
     def calculate_from_market_data(self, market_data: Dict[str, Any], rates: Optional[List] = None) -> List[float]:
-        """Calcular los 18 features desde datos actuales del mercado (para predictor)."""
+        """Calcular features para el predictor (SIN leakage)."""
         price = market_data.get('price', 0)
         ema50 = market_data.get('ema50', 0)
         ema200 = market_data.get('ema200', 0)
@@ -219,11 +209,7 @@ class Features:
         if rates:
             closes = [r[4] for r in rates]
         
-        # Features basics
-        return_1d = 0
-        return_5d = 0
-        volatility_5 = 0
-        volatility_15 = 0
+        # Features técnicos (sin leakage)
         macd = 0
         macd_signal = 0
         bb_upper = 0
@@ -232,25 +218,18 @@ class Features:
         stoch_k = 50
         stoch_d = 50
         adx = 25
-        momentum_5 = 0
         hour_of_day = 12
         day_of_week = 3
         
-        if len(closes) >= 2:
-            return_1d = (closes[-1] - closes[-2]) / closes[-2] * 100
-        if len(closes) >= 6:
-            return_5d = (closes[-1] - closes[-6]) / closes[-6] * 100
-        if len(closes) >= 5:
-            volatility_5 = np.std(closes[-5:])
-        if len(closes) >= 15:
-            volatility_15 = np.std(closes[-15:])
-        
+        # MACD
         if len(closes) >= 26:
             series = pd.Series(closes)
             ema12_val = series.ewm(span=12, adjust=False).mean().iloc[-1]
             ema26_val = series.ewm(span=26, adjust=False).mean().iloc[-1]
             macd = ema12_val - ema26_val
+            macd_signal = macd
         
+        # Bollinger
         if len(closes) >= 20:
             series = pd.Series(closes)
             bb_std = series.tail(20).std()
@@ -259,9 +238,37 @@ class Features:
             bb_lower = bb_ma - (bb_std * 2)
             bb_width = (bb_upper - bb_lower) / bb_ma * 100 if bb_ma > 0 else 0
         
+        # Time
         if rates and len(rates) > 0 and rates[-1][0] > 0:
             try:
                 import datetime
+                ts = datetime.datetime.fromtimestamp(rates[-1][0])
+                hour_of_day = ts.hour
+                day_of_week = ts.weekday()
+            except:
+                pass
+        
+        trend_val = 1 if trend == 'ALCISTA' else 0
+        
+        # Return only technical indicators (no returns/momentum)
+        return [
+            rsi,
+            price - ema50 if ema50 else 0,
+            price - ema200 if ema200 else 0,
+            (ema50 - ema200) if ema50 and ema200 else 0,
+            atr,
+            trend_val,
+            macd,
+            macd_signal,
+            bb_upper,
+            bb_lower,
+            bb_width,
+            stoch_k,
+            stoch_d,
+            adx,
+            hour_of_day,
+            day_of_week,
+        ]
                 ts = datetime.datetime.fromtimestamp(rates[-1][0])
                 hour_of_day = ts.hour
                 day_of_week = ts.weekday()
