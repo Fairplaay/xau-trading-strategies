@@ -1,7 +1,5 @@
 //+------------------------------------------------------------------+
-//| xau_emas.mq5 - Estrategia EMAs                                   |
-//| BUY: precio > EMA200 + RSI 45-70 + toca EMA50                     |
-//| SELL: precio < EMA200 + RSI 30-55 + toca EMA50                    |
+//| xau_emas.mq5 - Estrategia EMAs simple                            |
 //+------------------------------------------------------------------+
 
 #property copyright "Kilito"
@@ -9,209 +7,97 @@
 #property strict
 
 //--- Inputs
-input string InpSignalFile = "xau_signals.json";
 input double LotSize = 0.01;
 input int    RSI_Period = 14;
 input int    EMA50_Period = 50;
 input int    EMA200_Period = 200;
 input int    ATR_Period = 14;
-input int    MagicNumber = 123456;
 
-//--- SL/TP (scalping)
-input double SL_ATR_Multiplier = 0.5;
-input double TP_ATR_Multiplier = 1.5;
-
-//--- Handles
-int handle_rsi = INVALID_HANDLE;
-int handle_ema50 = INVALID_HANDLE;
-int handle_ema200 = INVALID_HANDLE;
-int handle_atr = INVALID_HANDLE;
-
-//--- Buffers
-double buffer_ema50[], buffer_ema200[], buffer_rsi[], buffer_atr[];
-
-//--- State
-datetime last_bar_time = 0;
-bool has_position = false;
-int position_ticket = 0;
-string position_type = "";
+//--- SL/TP
+input double SL_ATR = 0.5;
+input double TP_ATR = 1.5;
 
 //+------------------------------------------------------------------+
 int OnInit()
 {
-   handle_rsi = iRSI(_Symbol, PERIOD_CURRENT, RSI_Period, PRICE_CLOSE);
-   handle_ema50 = iMA(_Symbol, PERIOD_CURRENT, EMA50_Period, 0, MODE_EMA, PRICE_CLOSE);
-   handle_ema200 = iMA(_Symbol, PERIOD_CURRENT, EMA200_Period, 0, MODE_EMA, PRICE_CLOSE);
-   handle_atr = iATR(_Symbol, PERIOD_CURRENT, ATR_Period);
-   
-   if(handle_rsi == INVALID_HANDLE || handle_ema50 == INVALID_HANDLE ||
-      handle_ema200 == INVALID_HANDLE || handle_atr == INVALID_HANDLE)
-   {
-      Print("ERROR: No se pudieron crear los indicadores");
-      return INIT_FAILED;
-   }
-   
-   ArraySetAsSeries(buffer_ema50, true);
-   ArraySetAsSeries(buffer_ema200, true);
-   ArraySetAsSeries(buffer_rsi, true);
-   ArraySetAsSeries(buffer_atr, true);
-   
-   Print("xau_emas strategy iniciado");
+   Print("xau_emas iniciado");
    return INIT_SUCCEEDED;
 }
 
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-   if(handle_rsi != INVALID_HANDLE) IndicatorRelease(handle_rsi);
-   if(handle_ema50 != INVALID_HANDLE) IndicatorRelease(handle_ema50);
-   if(handle_ema200 != INVALID_HANDLE) IndicatorRelease(handle_ema200);
-   if(handle_atr != INVALID_HANDLE) IndicatorRelease(handle_atr);
    Print("xau_emas detenido");
 }
 
 //+------------------------------------------------------------------+
 void OnTick()
 {
-   datetime curr_time = iTime(_Symbol, PERIOD_CURRENT, 0);
+   // Solo operar si no hay posición abierta
+   if(PositionSelect(_Symbol))
+      return;
    
-   if(curr_time != last_bar_time)
+   // Obtener datos
+   double price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   double ema50 = iMA(_Symbol, PERIOD_CURRENT, EMA50_Period, 0, MODE_EMA, PRICE_CLOSE, 0);
+   double ema200 = iMA(_Symbol, PERIOD_CURRENT, EMA200_Period, 0, MODE_EMA, PRICE_CLOSE, 0);
+   double rsi = iRSI(_Symbol, PERIOD_CURRENT, RSI_Period, PRICE_CLOSE, 0);
+   double atr = iATR(_Symbol, PERIOD_CURRENT, ATR_Period, 0);
+   
+   // Señales
+   bool buy = false;
+   bool sell = false;
+   
+   // BUY: precio > EMA200 + RSI 45-70 + toca EMA50
+   if(price > ema200 && rsi >= 45 && rsi <= 70)
    {
-      last_bar_time = curr_time;
-      if(CopyIndicators())
-         CheckStrategy();
+      if(MathAbs(price - ema50) <= atr * 0.5)
+         buy = true;
    }
    
-   ManagePosition();
-}
-
-//+------------------------------------------------------------------+
-bool CopyIndicators()
-{
-   if(CopyBuffer(handle_ema50, 0, 0, 1, buffer_ema50) <= 0) return false;
-   if(CopyBuffer(handle_ema200, 0, 0, 1, buffer_ema200) <= 0) return false;
-   if(CopyBuffer(handle_rsi, 0, 0, 1, buffer_rsi) <= 0) return false;
-   if(CopyBuffer(handle_atr, 0, 0, 1, buffer_atr) <= 0) return false;
-   return true;
-}
-
-//+------------------------------------------------------------------+
-void CheckStrategy()
-{
-   double price = iClose(_Symbol, PERIOD_CURRENT, 0);
-   double ema50 = buffer_ema50[0];
-   double ema200 = buffer_ema200[0];
-   double rsi = buffer_rsi[0];
-   double atr = buffer_atr[0];
-   
-   if(!has_position)
+   // SELL: precio < EMA200 + RSI 30-55 + toca EMA50  
+   if(price < ema200 && rsi >= 30 && rsi <= 55)
    {
-      bool buy_signal = false;
-      bool sell_signal = false;
-      
-      // BUY: precio > EMA200 + RSI 45-70 + toca EMA50
-      if(price > ema200 && rsi >= 45 && rsi <= 70)
-      {
-         if(MathAbs(price - ema50) <= atr * 0.5)
-            buy_signal = true;
-      }
-      
-      // SELL: precio < EMA200 + RSI 30-55 + toca EMA50
-      if(price < ema200 && rsi >= 30 && rsi <= 55)
-      {
-         if(MathAbs(price - ema50) <= atr * 0.5)
-            sell_signal = true;
-      }
-      
-      if(buy_signal)
-         OpenPosition("BUY", price, atr);
-      else if(sell_signal)
-         OpenPosition("SELL", price, atr);
-      
-      WriteSignal(buy_signal ? "BUY" : (sell_signal ? "SELL" : "NADA"), price);
+      if(MathAbs(price - ema50) <= atr * 0.5)
+         sell = true;
    }
+   
+   // Ejecutar
+   if(buy)
+      OpenOrder(ORDER_TYPE_BUY, price, atr);
+   else if(sell)
+      OpenOrder(ORDER_TYPE_SELL, price, atr);
 }
 
 //+------------------------------------------------------------------+
-void OpenPosition(string type, double price, double atr)
+void OpenOrder(ENUM_ORDER_TYPE type, double price, double atr)
 {
-   double sl = 0, tp = 0;
+   double sl, tp;
    
-   if(type == "BUY")
+   if(type == ORDER_TYPE_BUY)
    {
-      sl = price - (atr * SL_ATR_Multiplier);
-      tp = price + (atr * TP_ATR_Multiplier);
+      sl = price - (atr * SL_ATR);
+      tp = price + (atr * TP_ATR);
    }
    else
    {
-      sl = price + (atr * SL_ATR_Multiplier);
-      tp = price - (atr * TP_ATR_Multiplier);
+      sl = price + (atr * SL_ATR);
+      tp = price - (atr * TP_ATR);
    }
    
-   int ticket = OrderSend(_Symbol, type == "BUY" ? ORDER_TYPE_BUY : ORDER_TYPE_SELL,
-                          LotSize, price, 10, sl, tp, "EMAs Strategy", MagicNumber, 0, type == "BUY" ? clrGreen : clrRed);
+   MqlTradeRequest request = {};
+   MqlTradeResult result = {};
    
-   if(ticket > 0)
-   {
-      has_position = true;
-      position_ticket = ticket;
-      position_type = type;
-      Print("Opened ", type, " ticket=", ticket, " SL=", sl, " TP=", tp);
-   }
-}
-
-//+------------------------------------------------------------------+
-void ManagePosition()
-{
-   if(!has_position)
-      return;
+   request.action = TRADE_ACTION_DEAL;
+   request.symbol = _Symbol;
+   request.volume = LotSize;
+   request.type = type;
+   request.price = price;
+   request.sl = sl;
+   request.tp = tp;
+   request.deviation = 10;
+   request.comment = "EMAs";
    
-   if(!OrderSelect(position_ticket, SELECT_BY_TICKET))
-   {
-      has_position = false;
-      return;
-   }
-   
-   double price = OrderOpenPrice();
-   double current = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-   double sl = OrderStopLoss();
-   double tp = OrderTakeProfit();
-   double profit = OrderProfit();
-   
-   // Check trailing SL (a favor)
-   if(position_type == "BUY" && current > price + 0.75)
-   {
-      double new_sl = price + 0.50;
-      if(new_sl > sl)
-         OrderModify(position_ticket, price, new_sl, tp, 0, clrGreen);
-   }
-   else if(position_type == "SELL" && current < price - 0.75)
-   {
-      double new_sl = price - 0.50;
-      if(new_sl < sl || sl == 0)
-         OrderModify(position_ticket, price, new_sl, tp, 0, clrRed);
-   }
-   
-   // Check if closed by SL/TP
-   if(OrderType() == OP_SELL || OrderType() == OP_BUY)
-   {
-      if(OrderCloseTime() > 0)
-      {
-         has_position = false;
-         Print("Position closed");
-      }
-   }
-}
-
-//+------------------------------------------------------------------+
-void WriteSignal(string signal, double price)
-{
-   int h = FileOpen(InpSignalFile, FILE_WRITE|FILE_TXT|FILE_ANSI);
-   if(h != INVALID_HANDLE)
-   {
-      string data = "{\"signal\":\"" + signal + "\",\"price\":" + DoubleToString(price, 2) + 
-                    ",\"time\":\"" + TimeToString(TimeCurrent()) + "\"}";
-      FileWriteString(h, data);
-      FileClose(h);
-   }
+   if(OrderSend(request, result))
+      Print("Orden abierta: ", type == ORDER_TYPE_BUY ? "BUY" : "SELL");
 }
