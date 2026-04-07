@@ -133,7 +133,9 @@ class Trainer:
         
         # Crear labels según estrategia
         print(f"🏷️ Creando labels ({self.label_strategy})...")
+        # Progress para labels
         labels = self._create_labels(rates)
+        print(f"   ✅ Labels creados: {len(labels)}")
         
         # Ajustar tamaños
         min_len = min(len(features_df), len(labels))
@@ -141,6 +143,7 @@ class Trainer:
         labels = labels[:min_len]
         
         # Limpiar: eliminar NaN
+        print("🧹 Limpiando datos...")
         mask = ~(features_df.isnull().any(axis=1))
         X = features_df[mask].reset_index(drop=True)
         y = [l for l, m in zip(labels, mask) if m]
@@ -166,7 +169,7 @@ class Trainer:
         )
         
         # Entrenar
-        print("🤖 Entrenando RandomForest...")
+        print("🤖 Entrenando RandomForest (esto puede tomar 1-2 minutos)...")
         self.model = RandomForestClassifier(
             n_estimators=100,
             max_depth=10,
@@ -174,7 +177,8 @@ class Trainer:
             min_samples_leaf=2,
             random_state=42,
             n_jobs=-1,
-            class_weight='balanced'
+            class_weight='balanced',
+            verbose=1  # Mostrar progreso
         )
         
         self.model.fit(X_train, y_train)
