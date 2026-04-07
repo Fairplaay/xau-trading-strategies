@@ -249,28 +249,45 @@ class Trainer:
     
     def _create_labels_sin_reglas(self, rates: List[List]) -> List[str]:
         """
-        Labels basados en resultado futuro (sin_reglas):
-        - BUY: si price[i+5] >= price[i] + ATR*0.3
-        - SELL: si price[i+5] <= price[i] - ATR*0.3
-        - NADA: en cualquier otro caso
+        Labels profesionales basados en SL/TP (3:1 ratio):
+        - BUY: toca TP antes que SL
+        - SELL: toca SL antes que TP
+        - NADA: no toca ni SL ni TP en 10 velas
         """
         labels = ['NADA'] * 50
-        lookahead = 5
+        lookahead = 10  # 10 velas (más realista)
         
         for i in range(50, len(rates) - lookahead - 1):
             closes = [r[4] for r in rates[:i+1]]
             current = closes[-1]
             
-            # Calcular ATR
+            # Calcular ATR para SL/TP
             atr = self._calculate_atr(rates[:i+1], 14)
-            threshold = atr * 0.3
             
-            # Precio futuro
-            future_price = closes[lookahead]
+            # Risk/Reward 3:1
+            sl_distance = max(0.25, atr * 1.5)
+            tp_distance = max(0.75, atr * 4.5)  # 3:1
             
-            if future_price >= current + threshold:
+            sl_level = current - sl_distance
+            tp_level = current + tp_distance
+            
+            # Buscar en las próximas 10 velas
+            future_closes = closes[1:lookahead+1]
+            
+            hit_tp = False
+            hit_sl = False
+            
+            for price in future_closes:
+                if price >= tp_level:
+                    hit_tp = True
+                    break
+                if price <= sl_level:
+                    hit_sl = True
+                    break
+            
+            if hit_tp:
                 labels.append('BUY')
-            elif future_price <= current - threshold:
+            elif hit_sl:
                 labels.append('SELL')
             else:
                 labels.append('NADA')

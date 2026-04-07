@@ -298,26 +298,44 @@ class LabelStrategyManager:
         no reglas deterministas.
         """
         labels = ['NADA'] * 50
-        lookahead = 5  # 5 velas adelante
+        lookahead = 10  # 10 velas adelante (profesional)
         
         for i in range(50, len(rates) - lookahead - 1):
             closes = [r[4] for r in rates[:i+1]]
             current = closes[-1]
             
-            # Calcular ATR para el threshold
+            # Calcular ATR para SL/TP
             window = rates[:i+1]
             atr = self._atr(window, 14)
             
-            # Threshold adaptativo basado en ATR
-            threshold = atr * 0.3
+            # Risk/Reward profesional: 3:1 ratio
+            # SL = 1.5x ATR (riesgo)
+            # TP = 4.5x ATR (recompensa 3:1)
+            sl_distance = max(0.25, atr * 1.5)
+            tp_distance = max(0.75, atr * 4.5)  # 3:1 ratio
             
-            # Precio futuro
-            future_price = closes[lookahead]
+            entry = current
+            sl_level = entry - sl_distance
+            tp_level = entry + tp_distance
             
-            # Label basado en resultado
-            if future_price >= current + threshold:
+            # Buscar en las próximas 10 velas cuál se toca primero
+            future_closes = closes[1:lookahead+1]
+            
+            hit_tp = False
+            hit_sl = False
+            
+            for price in future_closes:
+                if price >= tp_level:
+                    hit_tp = True
+                    break
+                if price <= sl_level:
+                    hit_sl = True
+                    break
+            
+            # Label profesional: qué se tocó primero
+            if hit_tp:
                 labels.append('BUY')
-            elif future_price <= current - threshold:
+            elif hit_sl:
                 labels.append('SELL')
             else:
                 labels.append('NADA')
