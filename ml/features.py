@@ -55,28 +55,28 @@ for i in range(50, len(df)):
     pbar.update(1)  # Incrementar 1
     
     window = df.iloc[:i+1]
-            
-            close = window['close'].values
-            high = window['high'].values
-            low = window['low'].values
-            volume = window['tick_volume'].values
-            
-            # RSI 14
-            rsi = self._calculate_rsi(close, 14)
-            
-            # EMAs
-            ema50 = self._calculate_ema(close, 50)
-            ema200 = self._calculate_ema(close, 200)
-            
-            # ATR 14
-            atr = self._calculate_atr(window, 14)
-            
-            # Posición actual
-            current_price = close[-1]
-            
-            # Features
-            features = {
-                'rsi': rsi,
+    
+    close = window['close'].values
+    high = window['high'].values
+    low = window['low'].values
+    volume = window['tick_volume'].values
+    
+    # RSI 14
+    rsi = self._calculate_rsi(close, 14)
+    
+    # EMAs
+    ema50 = self._calculate_ema(close, 50)
+    ema200 = self._calculate_ema(close, 200)
+    
+    # ATR 14
+    atr = self._calculate_atr(window, 14)
+    
+    # Posición actual
+    current_price = close[-1]
+    
+    # Features
+    features = {
+        'rsi': rsi,
                 'ema50_position': current_price - ema50,
                 'ema200_position': current_price - ema200,
                 'ema50_ema200_diff': ema50 - ema200,
