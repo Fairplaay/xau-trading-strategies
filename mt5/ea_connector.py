@@ -29,7 +29,7 @@ class EAConnector:
         self.last_command_result = ""
     
     def _find_files(self):
-        """Buscar los archivos JSON en Wine o directorio actual."""
+        """Buscar los archivos JSON en Wine, Windows o directorio actual."""
         home = os.path.expanduser("~")
         
         # Rutas de búsqueda
@@ -38,6 +38,21 @@ class EAConnector:
         if self.data_dir:
             search_paths.append(os.path.join(self.data_dir, self.DATA_FILE))
             search_paths.append(os.path.join(self.data_dir, self.COMMAND_FILE))
+        
+        # Windows MT5 paths (directo)
+        windows_paths = [
+            "C:\\Program Files\\Vantage International MT5\\MQL5\\Files",
+            "C:\\Program Files\\MetaTrader 5\\MQL5\\Files",
+            "C:\\Program Files (x86)\\MetaTrader 5\\MQL5\\Files",
+        ]
+        
+        for path in windows_paths:
+            data_file = os.path.join(path, self.DATA_FILE)
+            if os.path.exists(data_file):
+                self.data_file = data_file
+                self.command_file = os.path.join(path, self.COMMAND_FILE)
+                self.data_dir = path
+                return
         
         # Wine MT5 paths
         wine_paths = [
