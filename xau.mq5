@@ -14,7 +14,7 @@ input int    RSI_Period = 14;
 input int    EMA50_Period = 50;
 input int    EMA200_Period = 200;
 input int    ATR_Period = 14;
-input int    BarsToSave = 200;
+input int    BarsToSave = 1000; // Cambiado de 200 a 1000 para ML
 
 //--- Handles
 int handle_rsi = INVALID_HANDLE;
