@@ -46,14 +46,15 @@ class Features:
         ])
         
         features_list = []
-        total = len(df)
-        
-        for i in range(50, len(df)):
-            # Progress cada 100 velas (más frecuente)
-            if (i - 50) % 100 == 0:
-                print(f"   🔄 {i - 50}/{total - 50}", end="\r")
-            
-            window = df.iloc[:i+1]
+from tqdm import tqdm
+
+# Crear progress bar
+pbar = tqdm(total=len(df) - 50, desc="Features", unit="vela")
+
+for i in range(50, len(df)):
+    pbar.update(1)  # Incrementar 1
+    
+    window = df.iloc[:i+1]
             
             close = window['close'].values
             high = window['high'].values
@@ -90,6 +91,7 @@ class Features:
             
             features_list.append(features)
         
+        pbar.close()
         return pd.DataFrame(features_list)
     
     def calculate_from_market_data(self, market_data: Dict[str, Any], rates: Optional[List] = None) -> List[float]:
