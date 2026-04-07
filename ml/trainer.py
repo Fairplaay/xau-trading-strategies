@@ -27,14 +27,7 @@ from .labels import LabelStrategyManager
 
 # Estrategias de labels disponibles
 LABEL_STRATEGIES = {
-    'ema_rsi': 'EMA/RSI (precio vs EMA200 + RSI)',
-    'price_structure': 'Price Structure (soporte/resistencia)'
-}
-
-
-# Estrategias de labels disponibles
-LABEL_STRATEGIES = {
-    'ema_rsi': 'EMA/RSI (precio vs EMA200 + RSI)',
+    'emas': 'EMAs (Triple Confirmación) - EMA200 + RSI + EMA50/breaks',
     'price_structure': 'Price Structure (soporte/resistencia)'
 }
 
