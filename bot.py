@@ -1,28 +1,34 @@
 # -*- coding: utf-8 -*-
 """
-Bot principal de trading con IA.
-Ejecuta análisis y envía órdenes a MT5.
+Bot de trading con ML (RandomForest)
+Reemplaza estrategia determinista + LLM por modelo sklearn.
+
+Uso:
+    python bot.py                    # Usar modelo ML
+    python bot.py --train            # Entrenar modelo primero
+    python bot.py --model path.pkl   # Usar modelo específico
 """
 
 import argparse
 import time
 import sys
 import signal
+import os
 from datetime import datetime
 
-# Agregar el directorio del módulo al path
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from config import Config
 from news.calendar import NewsCalendar
-from ai.openrouter_client import AITradingClient
-from strategies import get_strategy, list_strategies
 from memory import Memory
-from learnings import Learnings
 
-# Importar conector según modo (evitar mt5/__init__.py que puede fallar)
+# ML imports
+from ml.predictor import Predictor
+from ml.trainer import Trainer
+from ml.features import Features
+
+# Conector EA
 if Config.USE_EA_FILE:
-    import sys
     sys.path.insert(0, __file__.rsplit("/", 1)[0])
     from mt5.ea_connector import EAConnector as MT5Connector
 else:
@@ -33,140 +39,136 @@ else:
 
 
 class TradingBot:
-    """Bot de trading automatizado."""
+    """Bot de trading con ML."""
     
-    def __init__(self, strategy_name: str = "EMARSI"):
-        self.strategy_name = strategy_name
+    def __init__(self, model_path: str = "modelo_xau.pkl"):
+        self.model_path = model_path
         self.running = False
         
         # Componentes
         self.config = Config
         self.news = None
-        self.ai = None
         self.mt5 = None
-        self.strategy = None
+        self.predictor = None
+        self.features_engine = None
         self.memory = None
-        self.learnings = None
     
-    def initialize(self) -> bool:
-        """Inicializa todos los componentes."""
+    def initialize(self, train_mode: bool = False) -> bool:
+        """Inicializar componentes."""
         print("=" * 50)
-        print("🤖 AI Trading Bot - XAU/USD")
+        print("🤖 ML Trading Bot - XAU/USD")
         print("=" * 50)
         
-        # 1. Validar configuración
-        if not self.config.validate():
-            print("⚠️ Advertencia: OPENROUTER_API_KEY no configurada")
-        
-        # 2. Cargar calendario de noticias
+        # 1. News calendar (filtro de noticias)
         print("\n📰 Cargando calendario de noticias...")
         self.news = NewsCalendar(self.config.FOREXFACTORY_URL)
         if not self.news.load():
-            print("⚠️ No se pudo cargar calendario, continuando sin filtro...")
+            print("⚠️ Sin filtro de noticias")
         
-        # 3. Conectar a IA (Ollama primero, luego OpenRouter)
-        print("\n🤖 Conectando a IA...")
-        
-        # Intentar Ollama primero
-        from ai.ollama_client import OllamaClient
-        self.ai = OllamaClient()
-        if self.ai.connect():
-            print(f"✅ IA conectada (Ollama: {self.ai.current_model})")
+        # 2. ML: entrenar o cargar modelo
+        if train_mode:
+            print("\n🎓 Modo entrenamiento...")
+            self._train_model()
         else:
-            # Fallback a OpenRouter
-            print("⚠️ Ollama no disponible, usando OpenRouter...")
-            from ai.openrouter_client import AITradingClient
-            self.ai = AITradingClient(
-                api_key=self.config.OPENROUTER_API_KEY,
-                model=self.config.MODEL_NAME,
-                temperature=self.config.TEMPERATURE,
-                max_tokens=self.config.MAX_TOKENS
-            )
-            if not self.ai.connect():
-                print("⚠️ No se pudo conectar a IA, continuando sin análisis...")
+            print("\n🤖 Cargando modelo ML...")
+            self.predictor = Predictor(self.model_path)
+            if not self.predictor.is_loaded:
+                print("⚠️ Modelo no encontrado. Usa --train para crear uno.")
+                return False
         
-        # 4. Cargar estrategia
-        print(f"\n📊 Cargando estrategia: {self.strategy_name}")
-        self.strategy = get_strategy(self.strategy_name)
-        if not self.strategy:
-            print(f"❌ Estrategia no encontrada: {self.strategy_name}")
-            return False
-        print(f"   {self.strategy.description}")
+        # 3. Features engine
+        self.features_engine = Features()
         
-        # 5. Conectar a MT5 o EA File
-        if self.config.USE_EA_FILE:
-            print("\n📁 Conectando al EA via archivos...")
+        # 4. Conectar a EA/MT5
+        if Config.USE_EA_FILE:
+            print("\n📁 Conectando al EA...")
             from mt5.ea_connector import EAConnector
-            self.mt5 = EAConnector(data_dir=self.config.EA_FILE_PATH if self.config.EA_FILE_PATH else None)
+            self.mt5 = EAConnector(data_dir=Config.EA_FILE_PATH)
             if not self.mt5.connect():
-                print("❌ No se pudo conectar al archivo del EA")
+                print("❌ No se pudo conectar al EA")
                 return False
         else:
-            print("\n🔌 Conectando a MetaTrader 5...")
+            print("\n🔌 Conectando a MT5...")
             self.mt5 = MT5Connector()
             if not self.mt5.connect(
-                login=self.config.MT5_ACCOUNT,
-                password=self.config.MT5_PASSWORD,
-                server=self.config.MT5_SERVER
+                login=Config.MT5_ACCOUNT,
+                password=Config.MT5_PASSWORD,
+                server=Config.MT5_SERVER
             ):
                 print("❌ No se pudo conectar a MT5")
                 return False
         
-        print("\n✅ Inicialización completa!")
-        
-        # 6. Cargar contexto (memory + learnings)
-        print("\n🧠 Cargando contexto...")
+        # 5. Memory
         self.memory = Memory()
-        self.learnings = Learnings()
         
-        # Inicializar IA con contexto
-        if self.ai and self.ai._connected:
-            self.ai.initialize_context(
-                memory_context=self.memory.get_context(),
-                learnings_context=self.learnings.get_context()
-            )
-            print(f"   Memory: {len(self.memory)} items")
-            print(f"   Learnings: {len(self.learnings)} items")
-        
+        print("\n✅ Inicialización completa!")
         return True
     
+    def _train_model(self):
+        """Entrenar modelo desde datos del EA."""
+        print("\n📂 Buscando datos para entrenamiento...")
+        
+        # Buscar archivo de datos
+        data_paths = [
+            "xau_data.json",
+            os.path.expanduser("~/Documentos/trading/xau_data.json"),
+        ]
+        
+        data_path = None
+        for path in data_paths:
+            if os.path.exists(path):
+                data_path = path
+                break
+        
+        if not data_path:
+            print("❌ No se encontró xau_data.json")
+            print("   Ejecuta el EA en MT5 para generar datos")
+            return False
+        
+        print(f"   Usando: {data_path}")
+        
+        # Entrenar
+        trainer = Trainer(self.model_path)
+        try:
+            results = trainer.train_from_json(data_path)
+            print("\n✅ Modelo entrenado!")
+            print(f"   Test Accuracy: {results['test_accuracy']:.2%}")
+            print(f"   CV Score: {results['cv_mean']:.2%}")
+            
+            # Cargar el modelo entrenado
+            self.predictor = Predictor(self.model_path)
+            
+        except Exception as e:
+            print(f"❌ Error entrenando: {e}")
+            return False
+    
     def cleanup(self):
-        """Limpieza al cerrar el bot."""
-        print("🔄 Cerrando conexiones...")
+        """Limpieza al cerrar."""
+        print("\n🔄 Cerrando...")
         if hasattr(self, 'mt5') and self.mt5:
             self.mt5.disconnect()
-        if hasattr(self, 'news'):
-            print("   ✓ News calendar cerrado")
-        print("   ✓ Limpieza completada")
+        print("✅ Listo")
     
     def get_market_data(self) -> dict:
-        """Obtiene datos actuales del mercado."""
-        symbol = self.config.SYMBOL
+        """Obtener datos del mercado."""
+        symbol = Config.SYMBOL
         
-        # Obtener tick
         tick = self.mt5.get_tick(symbol)
         if not tick:
             return {}
         
-        # Obtener rates para calcular indicadores
-        rates = self.mt5.get_rates(symbol, self.config.TIMEFRAME, 200)
+        rates = self.mt5.get_rates(symbol, Config.TIMEFRAME, 200)
         if rates is None or len(rates) < 200:
             return {"price": tick.get("bid")}
         
-        # Calcular EMAs y RSI manualmente (simplificado)
-        closes = [r[4] for r in rates]  # Close prices
+        # Calcular indicadores
+        closes = [r[4] for r in rates]
         
-        # EMA 50 y 200
         ema50 = self._calculate_ema(closes, 50)
         ema200 = self._calculate_ema(closes, 200)
-        
-        # RSI 14
         rsi = self._calculate_rsi(closes, 14)
-        
-        # ATR 14
         atr = self._calculate_atr(rates, 14)
         
-        # Determinar tendencia
         trend = "ALCISTA" if tick.get("bid", 0) > ema200 else "BAJISTA"
         
         return {
@@ -175,27 +177,24 @@ class TradingBot:
             "ema200": ema200,
             "rsi": rsi,
             "atr": atr,
-            "trend": trend
+            "trend": trend,
+            "rates": rates
         }
     
     def _calculate_ema(self, prices: list, period: int) -> float:
-        """Calcula EMA."""
         if len(prices) < period:
             return prices[-1] if prices else 0
         
-        # SMA inicial
         sma = sum(prices[-period:]) / period
         multiplier = 2 / (period + 1)
-        
-        # Calcular EMA
         ema = sma
+        
         for price in reversed(prices[:-period]):
             ema = (price - ema) * multiplier + ema
         
         return ema
     
     def _calculate_rsi(self, prices: list, period: int = 14) -> float:
-        """Calcula RSI."""
         if len(prices) < period + 1:
             return 50
         
@@ -218,12 +217,9 @@ class TradingBot:
             return 100
         
         rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
-        
-        return rsi
+        return 100 - (100 / (1 + rs))
     
     def _calculate_atr(self, rates: list, period: int = 14) -> float:
-        """Calcula ATR."""
         if len(rates) < period + 1:
             return 0.5
         
@@ -233,202 +229,145 @@ class TradingBot:
             low = rates[i][3]
             prev_close = rates[i-1][4]
             
-            tr = max(
-                high - low,
-                abs(high - prev_close),
-                abs(low - prev_close)
-            )
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             trs.append(tr)
         
         return sum(trs[-period:]) / period
     
     def check_news_block(self) -> dict:
-        """Verifica estado de bloqueo por noticias."""
+        """Verificar bloqueo por noticias."""
         if not self.news or not self.news._loaded:
             return {"blocked": False, "level": "NONE"}
         
         status = self.news.get_block_status()
         
-        if status["high_impact_blocked"]:
+        if status.get("high_impact_blocked"):
             return {
                 "blocked": True,
                 "level": "HIGH",
-                "reason": f"Noticias de alto impacto: {status['upcoming_high']}"
-            }
-        
-        if status["medium_impact_blocked"]:
-            return {
-                "blocked": True,
-                "level": "MEDIUM",
-                "reason": f"Noticias de medio impacto: {status['upcoming_medium']}"
+                "reason": f"Noticias alto impacto: {status.get('upcoming_high')}"
             }
         
         return {"blocked": False, "level": "NONE"}
     
+    def calculate_sl_tp(self, direction: str, price: float, atr: float) -> dict:
+        """Calcular SL y TP."""
+        sl_distance = max(0.25, min(atr * 1.5, 1.0))
+        tp_distance = max(0.25, min(atr * 1.0, 2.0))
+        
+        if direction == "BUY":
+            return {"sl": price - sl_distance, "tp": price + tp_distance}
+        else:
+            return {"sl": price + sl_distance, "tp": price - tp_distance}
+    
     def run(self):
-        """Ejecuta el loop principal del bot."""
+        """Loop principal."""
         if not self.initialize():
-            print("❌ Error en inicialización. Saliendo.")
+            print("❌ Error de inicialización")
             return
         
         self.running = True
-        print(f"\n🔄 Iniciando loop principal (cada {self.config.CHECK_INTERVAL}s)")
+        print(f"\n🔄 Loop principal (cada {Config.CHECK_INTERVAL}s)")
         print("Presiona Ctrl+C para detener\n")
         
-        # Guardar referencia al bot para el handler
         bot_instance = self
         
-        # Handler para Ctrl+C - definido fuera del loop
         def handle_interrupt(signum, frame):
-            print("\n\n🛑 Deteniendo bot...")
-            print("   Cerrando conexiones...")
+            print("\n🛑 Deteniendo bot...")
             bot_instance.running = False
             bot_instance.cleanup()
-            print("✅ Bot detenido correctamente")
             sys.exit(0)
         
         signal.signal(signal.SIGINT, handle_interrupt)
         
-        # Loop principal - sincronizado con inicio de vela M1
-        # Ejecuta 5 segundos ANTES del inicio de cada minuto (anticipación)
         while self.running:
             try:
-                # Calcular tiempo hasta próximo minuto
-                now = datetime.now()
-                # El próximo minuto empieza en (60 - segundo) segundos
-                # Ejecutamos 5 segundos antes: (60 - segundo) - 5 = 55 - segundo
-                seconds_to_wait = max(1, 55 - now.second)
-                
-                # Obtener datos ANTES de que termine el minuto actual
-                # Esto nos da la vela que está por cerrar
-                
                 # 1. Verificar noticias
                 news_status = self.check_news_block()
                 if news_status["blocked"]:
-                    print(f"⏸️ [{datetime.now().strftime('%H:%M:%S')}] Bloqueado por noticias ({news_status['level']}): {news_status.get('reason', '')}")
-                    # Calcular espera para próximo ciclo (5 seg antes del minuto)
-                    # Esperar hasta segundo 55
+                    print(f"⏸️ [{datetime.now().strftime('%H:%M:%S')}] "
+                          f"Bloqueado por noticias ({news_status['level']})")
                     wait = 55 - datetime.now().second
                     if wait <= 0:
                         wait += 60
                     time.sleep(wait)
                     continue
                 
-                # 2. Obtener datos del mercado
+                # 2. Obtener datos
                 market_data = self.get_market_data()
                 if not market_data:
-                    print(f"⚠️ [{datetime.now().strftime('%H:%M:%S')}] No se pudo obtener datos")
-                    # Esperar hasta segundo 55
+                    print(f"⚠️ Sin datos del mercado")
                     wait = 55 - datetime.now().second
                     if wait <= 0:
                         wait += 60
                     time.sleep(wait)
                     continue
                 
-                # Agregar estado de noticias al market_data
-                market_data["news_status"] = f"Sin bloqueo ({news_status['level']})"
+                # 3. Predecir con ML
+                rates = market_data.pop("rates", None)
+                signal = self.predictor.predict(market_data, rates)
                 
-                # 3. Analizar con estrategia (sin IA, solo reglas)
-                trade_signal = self.strategy.analyze(market_data)
-                
-                if trade_signal:
-                    print(f"\n🚨 SEÑAL DETECTADA: {trade_signal.direction}")
-                    print(f"   Precio: ${trade_signal.price:.2f}")
-                    print(f"   SL: ${trade_signal.sl:.2f} | TP1: ${trade_signal.tp1:.2f}")
-                    print(f"   Razón: {trade_signal.reason}")
-                    
-                    # 4. Si hay IA, confirmar con ella
-                    if self.ai and self.ai._connected:
-                        print("🤖 Confirmando con IA...")
-                        ai_decision = self.ai.analyze(
-                            market_data,
-                            self.strategy.rules
-                        )
-                        print(f"   IA decisión: {ai_decision}")
-                        
-                        # Usar decisión de IA
-                        if ai_decision != "NADA":
-                            # 5. Enviar orden a MT5
-                            result = self.mt5.send_order(
-                                symbol=self.config.SYMBOL,
-                                order_type=ai_decision,
-                                volume=self.config.VOLUME,
-                                deviation=self.config.DEVIATION,
-                                sl=trade_signal.sl,
-                                tp=trade_signal.tp1,
-                                comment=f"{self.strategy.name} - {trade_signal.reason}"
-                            )
-                            if result and result.get("success"):
-                                print(f"✅ Orden ejecutada!")
-                                # Actualizar memory
-                                if self.memory:
-                                    self.memory.add_operation(
-                                        direction=ai_decision,
-                                        symbol=self.config.SYMBOL,
-                                        pnl="pendiente"
-                                    )
-                            else:
-                                print(f"❌ Error en orden: {result}")
-                        else:
-                            print("⏭️ IA rechazó la señal")
-                    else:
-                        # Sin IA, ejecutar directo (opcional)
-                        print("⚠️ Sin IA configurada, señal no ejecutada")
+                if signal == "NADA":
+                    print(f"⏳ [{datetime.now().strftime('%H:%M:%S')}] "
+                          f"Sin señal - {market_data.get('trend', 'N/A')} | "
+                          f"RSI: {market_data.get('rsi', 0):.1f}")
                 else:
-                    print(f"⏳ [{datetime.now().strftime('%H:%M:%S')}] Sin señal - {market_data.get('trend', 'N/A')} | RSI: {market_data.get('rsi', 0):.1f}")
+                    # 4. Ejecutar orden
+                    print(f"\n🚨 SEÑAL: {signal}")
+                    print(f"   Precio: ${market_data.get('price', 0):.2f}")
+                    
+                    # Calcular SL/TP
+                    sl_tp = self.calculate_sl_tp(
+                        signal,
+                        market_data.get('price', 0),
+                        market_data.get('atr', 0.5)
+                    )
+                    
+                    # Enviar orden
+                    result = self.mt5.send_order(
+                        symbol=Config.SYMBOL,
+                        order_type=signal,
+                        volume=Config.VOLUME,
+                        deviation=Config.DEVIATION,
+                        sl=sl_tp["sl"],
+                        tp=sl_tp["tp"],
+                        comment=f"ML - {signal}"
+                    )
+                    
+                    if result and result.get("success"):
+                        print(f"✅ Orden ejecutada!")
+                        if self.memory:
+                            self.memory.add_operation(
+                                direction=signal,
+                                symbol=Config.SYMBOL,
+                                pnl="pendiente"
+                            )
+                    else:
+                        print(f"❌ Error: {result}")
                 
-                # Esperar hasta el segundo 55 del siguiente minuto
-                now = datetime.now()
-                wait = 55 - now.second
-                if wait <= 0:
-                    wait += 60  # Ya pasó el 55, esperar al siguiente
-                time.sleep(wait)
-                
-            except Exception as e:
-                print(f"❌ Error en loop: {e}")
-                # Esperar hasta segundo 55
+                # Esperar
                 wait = 55 - datetime.now().second
                 if wait <= 0:
                     wait += 60
                 time.sleep(wait)
-        
-        # Cleanup
-        print("\n🔌 Cerrando conexiones...")
-        if self.mt5:
-            self.mt5.disconnect()
-        print("👋 Bot detenido")
-    
-    def stop(self):
-        """Detiene el bot."""
-        self.running = False
+                
+            except Exception as e:
+                print(f"❌ Error en loop: {e}")
+                time.sleep(10)
 
 
 def main():
-    """Entry point."""
-    parser = argparse.ArgumentParser(description="AI Trading Bot para XAU/USD")
-    parser.add_argument(
-        "--strategy",
-        type=str,
-        default="EMARSI",
-        choices=["EMARSI", "STRUCTURE"],
-        help="Estrategia a usar"
-    )
-    parser.add_argument(
-        "--list-strategies",
-        action="store_true",
-        help="Lista estrategias disponibles"
-    )
+    parser = argparse.ArgumentParser(description="ML Trading Bot")
+    parser.add_argument("--train", action="store_true",
+                        help="Entrenar modelo antes de iniciar")
+    parser.add_argument("--model", default="modelo_xau.pkl",
+                        help="Ruta al modelo")
+    parser.add_argument("--no-validate", action="store_true",
+                        help="Saltar validación de config")
     
     args = parser.parse_args()
     
-    if args.list_strategies:
-        print("📊 Estrategias disponibles:")
-        for name, desc in list_strategies().items():
-            print(f"  - {name}: {desc}")
-        return
-    
-    # Crear y ejecutar bot
-    bot = TradingBot(strategy_name=args.strategy)
+    bot = TradingBot(model_path=args.model)
     bot.run()
 
 
