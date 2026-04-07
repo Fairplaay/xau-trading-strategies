@@ -15,19 +15,41 @@ input double TP_ATR = 1.5;
 input double TrailProfit = 0.75;
 input double TrailLock = 0.50;
 
+int hRSI, hATR;
+double bufRSI[], bufATR[];
+
 //+------------------------------------------------------------------+
-int OnInit() { Print("xau_price_structure iniciado"); return INIT_SUCCEEDED; }
-void OnDeinit(const int reason) { Print("xau_price_structure detenido"); }
+int OnInit()
+{
+   hRSI = iRSI(_Symbol, PERIOD_CURRENT, RSI_Period, PRICE_CLOSE);
+   hATR = iATR(_Symbol, PERIOD_CURRENT, ATR_Period);
+   ArraySetAsSeries(bufRSI, true);
+   ArraySetAsSeries(bufATR, true);
+   Print("xau_price_structure iniciado");
+   return INIT_SUCCEEDED;
+}
+
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   IndicatorRelease(hRSI);
+   IndicatorRelease(hATR);
+   Print("xau_price_structure detenido");
+}
 
 //+------------------------------------------------------------------+
 void OnTick()
 {
    if(PositionSelect(_Symbol)) { ManagePosition(); return; }
    
-   double price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-   double rsi = iRSI(_Symbol, PERIOD_CURRENT, RSI_Period, PRICE_CLOSE, 0);
-   double atr = iATR(_Symbol, PERIOD_CURRENT, ATR_Period, 0);
+   if(CopyBuffer(hRSI, 0, 0, 1, bufRSI) <= 0) return;
+   if(CopyBuffer(hATR, 0, 0, 1, bufATR) <= 0) return;
    
+   double price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   double rsi = bufRSI[0];
+   double atr = bufATR[0];
+   
+   // Soporte/Resistencia
    double support = price, resistance = price;
    for(int i = 1; i <= Lookback; i++)
    {
@@ -60,9 +82,8 @@ void OpenOrder(ENUM_ORDER_TYPE type, double price, double atr)
    request.tp = tp;
    request.deviation = 10;
    request.comment = "PriceStruct";
-   
    MqlTradeResult result;
-   if(OrderSend(request, result)) Print("Abierto: ", type == ORDER_TYPE_BUY ? "BUY" : "SELL");
+   if(OrderSend(request, result)) Print("Abierto");
 }
 
 //+------------------------------------------------------------------+
@@ -71,13 +92,12 @@ void ManagePosition()
    if(!PositionSelect(_Symbol)) return;
    
    double entry = PositionOpenPrice();
-   double sl = PositionStopLoss();
    ENUM_POSITION_TYPE type = PositionType();
    double current = (type == POSITION_TYPE_BUY) ? SymbolInfoDouble(_Symbol, SYMBOL_BID) : SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    
-   if(type == POSITION_TYPE_BUY && current > entry + TrailProfit && sl < entry + TrailLock)
+   if(type == POSITION_TYPE_BUY && current > entry + TrailProfit && PositionStopLoss() < entry + TrailLock)
       ModifySL(entry + TrailLock);
-   else if(type == POSITION_TYPE_SELL && current < entry - TrailProfit && (sl == 0 || sl > entry - TrailLock))
+   else if(type == POSITION_TYPE_SELL && current < entry - TrailProfit && (PositionStopLoss() == 0 || PositionStopLoss() > entry - TrailLock))
       ModifySL(entry - TrailLock);
 }
 
@@ -86,7 +106,7 @@ void ModifySL(double new_sl)
 {
    MqlTradeRequest request = {};
    request.action = TRADE_ACTION_SLTP;
-   request.position = PositionGetTicket(0);
+   request.position = PositionGetTicket();
    request.sl = new_sl;
    request.tp = PositionTakeProfit();
    MqlTradeResult result;

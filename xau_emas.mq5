@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//| xau_emas.mq5 - Estrategia EMAs con trailing SL                 |
+//| xau_emas.mq5 - Estrategia EMAs con trailing SL                |
 //+------------------------------------------------------------------+
 
 #property copyright "Kilito"
@@ -12,18 +12,30 @@ input int    RSI_Period = 14;
 input int    EMA50_Period = 50;
 input int    EMA200_Period = 200;
 input int    ATR_Period = 14;
-
-//--- SL/TP
 input double SL_ATR = 0.5;
 input double TP_ATR = 1.5;
+input double TrailProfit = 0.75;
+input double TrailLock = 0.50;
 
-//--- Trailing SL
-input double TrailProfit = 0.75;  // Cuando mover SL
-input double TrailLock = 0.50;    // Nuevo SL
+//--- Handles
+int hRSI, hEMA50, hEMA200, hATR;
+
+//--- Buffers
+double bufRSI[], bufEMA50[], bufEMA200[], bufATR[];
 
 //+------------------------------------------------------------------+
 int OnInit()
 {
+   hRSI = iRSI(_Symbol, PERIOD_CURRENT, RSI_Period, PRICE_CLOSE);
+   hEMA50 = iMA(_Symbol, PERIOD_CURRENT, EMA50_Period, 0, MODE_EMA, PRICE_CLOSE);
+   hEMA200 = iMA(_Symbol, PERIOD_CURRENT, EMA200_Period, 0, MODE_EMA, PRICE_CLOSE);
+   hATR = iATR(_Symbol, PERIOD_CURRENT, ATR_Period);
+   
+   ArraySetAsSeries(bufRSI, true);
+   ArraySetAsSeries(bufEMA50, true);
+   ArraySetAsSeries(bufEMA200, true);
+   ArraySetAsSeries(bufATR, true);
+   
    Print("xau_emas iniciado");
    return INIT_SUCCEEDED;
 }
@@ -31,43 +43,46 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
+   IndicatorRelease(hRSI);
+   IndicatorRelease(hEMA50);
+   IndicatorRelease(hEMA200);
+   IndicatorRelease(hATR);
    Print("xau_emas detenido");
 }
 
 //+------------------------------------------------------------------+
 void OnTick()
 {
-   // Verificar posición existente
+   // Verificar posición
    if(PositionSelect(_Symbol))
    {
       ManagePosition();
       return;
    }
    
-   // Solo operar si no hay posición
+   // Copiar indicadores
+   if(CopyBuffer(hRSI, 0, 0, 1, bufRSI) <= 0) return;
+   if(CopyBuffer(hEMA50, 0, 0, 1, bufEMA50) <= 0) return;
+   if(CopyBuffer(hEMA200, 0, 0, 1, bufEMA200) <= 0) return;
+   if(CopyBuffer(hATR, 0, 0, 1, bufATR) <= 0) return;
+   
    double price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-   double ema50 = iMA(_Symbol, PERIOD_CURRENT, EMA50_Period, 0, MODE_EMA, PRICE_CLOSE, 0);
-   double ema200 = iMA(_Symbol, PERIOD_CURRENT, EMA200_Period, 0, MODE_EMA, PRICE_CLOSE, 0);
-   double rsi = iRSI(_Symbol, PERIOD_CURRENT, RSI_Period, PRICE_CLOSE, 0);
-   double atr = iATR(_Symbol, PERIOD_CURRENT, ATR_Period, 0);
+   double ema50 = bufEMA50[0];
+   double ema200 = bufEMA200[0];
+   double rsi = bufRSI[0];
+   double atr = bufATR[0];
    
-   bool buy = false;
-   bool sell = false;
+   // Señales
+   bool buy = false, sell = false;
    
-   // BUY: precio > EMA200 + RSI 45-70 + toca EMA50
-   if(price > ema200 && rsi >= 45 && rsi <= 70)
-      if(MathAbs(price - ema50) <= atr * 0.5)
-         buy = true;
+   if(price > ema200 && rsi >= 45 && rsi <= 70 && MathAbs(price - ema50) <= atr * 0.5)
+      buy = true;
    
-   // SELL: precio < EMA200 + RSI 30-55 + toca EMA50
-   if(price < ema200 && rsi >= 30 && rsi <= 55)
-      if(MathAbs(price - ema50) <= atr * 0.5)
-         sell = true;
+   if(price < ema200 && rsi >= 30 && rsi <= 55 && MathAbs(price - ema50) <= atr * 0.5)
+      sell = true;
    
-   if(buy)
-      OpenOrder(ORDER_TYPE_BUY, price, atr);
-   else if(sell)
-      OpenOrder(ORDER_TYPE_SELL, price, atr);
+   if(buy) OpenOrder(ORDER_TYPE_BUY, price, atr);
+   else if(sell) OpenOrder(ORDER_TYPE_SELL, price, atr);
 }
 
 //+------------------------------------------------------------------+
@@ -96,33 +111,25 @@ void OpenOrder(ENUM_ORDER_TYPE type, double price, double atr)
 //+------------------------------------------------------------------+
 void ManagePosition()
 {
-   if(!PositionSelect(_Symbol))
-      return;
+   if(!PositionSelect(_Symbol)) return;
    
    double entry = PositionOpenPrice();
-   double sl = PositionStopLoss();
-   double tp = PositionTakeProfit();
    ENUM_POSITION_TYPE type = PositionType();
-   
    double current = (type == POSITION_TYPE_BUY) ? SymbolInfoDouble(_Symbol, SYMBOL_BID) 
                                                  : SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    
    // Trailing SL
-   if(type == POSITION_TYPE_BUY)
+   if(type == POSITION_TYPE_BUY && current > entry + TrailProfit)
    {
-      if(current > entry + TrailProfit && sl < entry + TrailLock)
-      {
-         double new_sl = entry + TrailLock;
+      double new_sl = entry + TrailLock;
+      if(PositionStopLoss() < new_sl)
          ModifySL(new_sl);
-      }
    }
-   else
+   else if(type == POSITION_TYPE_SELL && current < entry - TrailProfit)
    {
-      if(current < entry - TrailProfit && (sl == 0 || sl > entry - TrailLock))
-      {
-         double new_sl = entry - TrailLock;
+      double new_sl = entry - TrailLock;
+      if(PositionStopLoss() == 0 || PositionStopLoss() > new_sl)
          ModifySL(new_sl);
-      }
    }
 }
 
@@ -130,12 +137,10 @@ void ManagePosition()
 void ModifySL(double new_sl)
 {
    MqlTradeRequest request = {};
-   MqlTradeResult result = {};
-   
    request.action = TRADE_ACTION_SLTP;
-   request.position = PositionGetTicket(0);
+   request.position = PositionGetTicket();
    request.sl = new_sl;
    request.tp = PositionTakeProfit();
-   
+   MqlTradeResult result;
    OrderSend(request, result);
 }
