@@ -172,13 +172,15 @@ class Trainer:
         print("🤖 Entrenando RandomForest (esto puede tomar 1-2 minutos)...")
         self.model = RandomForestClassifier(
             n_estimators=100,
-            max_depth=10,
-            min_samples_split=5,
-            min_samples_leaf=2,
+            max_depth=8,              # Era 10 - más rápido
+            min_samples_split=10,    # Era 5 - más rápido
+            min_samples_leaf=5,       # Era 2 - más rápido
+            n_estimators=50,         # Era 100 - más rápido
+            n_jobs=-1,               # Usar todos los cores
+            warm_start=False,        # Mantener False para primer entrenamiento
             random_state=42,
-            n_jobs=-1,
             class_weight='balanced',
-            verbose=1  # Mostrar progreso
+            verbose=1
         )
         
         self.model.fit(X_train, y_train)

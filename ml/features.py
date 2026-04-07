@@ -74,12 +74,13 @@ class Features:
                     'ema200_position': current_price - ema200,
                     'ema50_ema200_diff': ema50 - ema200,
                     'atr': atr,
-                    'atr_position': atr / np.mean(close[-20:-1]) if len(close) > 20 else 1,
+                    'atr_position': atr / np.mean(close[-10:-1]) if len(close) > 10 else 1,
                     'trend': 1 if current_price > ema200 else 0,
-                    'rsi_change': rsi - self._calculate_rsi(close[:-3], 14) if len(close) > 3 else 0,
-                    'price_change': (close[-1] - close[-4]) / close[-4] * 100 if len(close) >= 4 else 0,
-                    'volatility': (np.max(high[-10:]) - np.min(low[-10:])) / np.mean(close[-10:]) * 100,
-                    'volume_avg': np.mean(volume[-10:]),
+                    # Simplificados: solo 1 vela en vez de 3-10
+                    'rsi_change': rsi - self._calculate_rsi(close[:-1], 14) if len(close) > 1 else 0,
+                    'price_change': (close[-1] - close[-2]) / close[-2] * 100 if len(close) >= 2 else 0,
+                    'volatility': (max(high[-5:]) - min(low[-5:])) / np.mean(close[-5:]) * 100,
+                    'volume_avg': np.mean(volume[-5:]),  # Reducido de 10 a 5
                 }
                 
                 features_list.append(features)
