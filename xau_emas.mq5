@@ -9,7 +9,6 @@
 #property strict
 
 //--- Inputs
-input string InpDataFile = "xau_data.json";
 input string InpSignalFile = "xau_signals.json";
 input double LotSize = 0.01;
 input int    RSI_Period = 14;
@@ -19,14 +18,17 @@ input int    ATR_Period = 14;
 input int    MagicNumber = 123456;
 
 //--- SL/TP (scalping)
-input double SL_ATR_Multiplier = 0.5;  // SL = ATR * 0.5
-input double TP_ATR_Multiplier = 1.5;  // TP = ATR * 1.5 (3:1)
+input double SL_ATR_Multiplier = 0.5;
+input double TP_ATR_Multiplier = 1.5;
 
 //--- Handles
 int handle_rsi = INVALID_HANDLE;
 int handle_ema50 = INVALID_HANDLE;
 int handle_ema200 = INVALID_HANDLE;
 int handle_atr = INVALID_HANDLE;
+
+//--- Buffers
+double buffer_ema50[], buffer_ema200[], buffer_rsi[], buffer_atr[];
 
 //--- State
 datetime last_bar_time = 0;
@@ -49,7 +51,12 @@ int OnInit()
       return INIT_FAILED;
    }
    
-   Print("xau_emasStrategy iniciado");
+   ArraySetAsSeries(buffer_ema50, true);
+   ArraySetAsSeries(buffer_ema200, true);
+   ArraySetAsSeries(buffer_rsi, true);
+   ArraySetAsSeries(buffer_atr, true);
+   
+   Print("xau_emas strategy iniciado");
    return INIT_SUCCEEDED;
 }
 
@@ -68,57 +75,59 @@ void OnTick()
 {
    datetime curr_time = iTime(_Symbol, PERIOD_CURRENT, 0);
    
-   // Solo procesar al inicio de cada vela
    if(curr_time != last_bar_time)
    {
       last_bar_time = curr_time;
-      CheckStrategy();
+      if(CopyIndicators())
+         CheckStrategy();
    }
    
-   // Manage position
    ManagePosition();
+}
+
+//+------------------------------------------------------------------+
+bool CopyIndicators()
+{
+   if(CopyBuffer(handle_ema50, 0, 0, 1, buffer_ema50) <= 0) return false;
+   if(CopyBuffer(handle_ema200, 0, 0, 1, buffer_ema200) <= 0) return false;
+   if(CopyBuffer(handle_rsi, 0, 0, 1, buffer_rsi) <= 0) return false;
+   if(CopyBuffer(handle_atr, 0, 0, 1, buffer_atr) <= 0) return false;
+   return true;
 }
 
 //+------------------------------------------------------------------+
 void CheckStrategy()
 {
-   // Obtener datos
    double price = iClose(_Symbol, PERIOD_CURRENT, 0);
-   double ema50 = iMAOnArray(0, 0, EMA50_Period, 0, MODE_EMA, PRICE_CLOSE, 0);
-   double ema200 = iMAOnArray(0, 0, EMA200_Period, 0, MODE_EMA, PRICE_CLOSE, 0);
-   double rsi = iRSIOnArray(0, 0, RSI_Period, PRICE_CLOSE, 0);
-   double atr = iATROnArray(0, 0, ATR_Period, 0);
+   double ema50 = buffer_ema50[0];
+   double ema200 = buffer_ema200[0];
+   double rsi = buffer_rsi[0];
+   double atr = buffer_atr[0];
    
-   // Verificar si hay posición abierta
    if(!has_position)
    {
-      // Señales BUY/SELL según estrategia EMAs
       bool buy_signal = false;
       bool sell_signal = false;
       
       // BUY: precio > EMA200 + RSI 45-70 + toca EMA50
       if(price > ema200 && rsi >= 45 && rsi <= 70)
       {
-         double touch_ema50 = MathAbs(price - ema50);
-         if(touch_ema50 <= atr * 0.5)  // Toca EMA50
+         if(MathAbs(price - ema50) <= atr * 0.5)
             buy_signal = true;
       }
       
       // SELL: precio < EMA200 + RSI 30-55 + toca EMA50
       if(price < ema200 && rsi >= 30 && rsi <= 55)
       {
-         double touch_ema50 = MathAbs(price - ema50);
-         if(touch_ema50 <= atr * 0.5)  // Toca EMA50
+         if(MathAbs(price - ema50) <= atr * 0.5)
             sell_signal = true;
       }
       
-      // Ejecutar
       if(buy_signal)
          OpenPosition("BUY", price, atr);
       else if(sell_signal)
          OpenPosition("SELL", price, atr);
       
-      // Escribir señal
       WriteSignal(buy_signal ? "BUY" : (sell_signal ? "SELL" : "NADA"), price);
    }
 }

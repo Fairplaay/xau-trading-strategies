@@ -1,7 +1,7 @@
 //+------------------------------------------------------------------+
 //| xau_price_structure.mq5 - Estrategia Price Structure           |
 //| BUY: precio toca soporte + RSI > 50                              |
-//| SELL: precio toca resistencia + RSI < 50                          |
+//| SELL: precio toca resistencia + RSI < 50                         |
 //+------------------------------------------------------------------+
 
 #property copyright "Kilito"
@@ -9,21 +9,23 @@
 #property strict
 
 //--- Inputs
-input string InpDataFile = "xau_data.json";
 input string InpSignalFile = "xau_signals.json";
 input double LotSize = 0.01;
 input int    RSI_Period = 14;
-input int    Lookback = 20;       // Buscar soporte/resistencia en últimas 20 velas
+input int    Lookback = 20;
 input int    ATR_Period = 14;
 input int    MagicNumber = 123457;
 
-//--- SL/TP (scalping)
+//--- SL/TP
 input double SL_ATR_Multiplier = 0.5;
 input double TP_ATR_Multiplier = 1.5;
 
 //--- Handles
 int handle_rsi = INVALID_HANDLE;
 int handle_atr = INVALID_HANDLE;
+
+//--- Buffers
+double buffer_rsi[], buffer_atr[];
 
 //--- State
 datetime last_bar_time = 0;
@@ -42,6 +44,9 @@ int OnInit()
       Print("ERROR: No se pudieron crear los indicadores");
       return INIT_FAILED;
    }
+   
+   ArraySetAsSeries(buffer_rsi, true);
+   ArraySetAsSeries(buffer_atr, true);
    
    Print("xau_price_structure iniciado");
    return INIT_SUCCEEDED;
@@ -63,10 +68,19 @@ void OnTick()
    if(curr_time != last_bar_time)
    {
       last_bar_time = curr_time;
-      CheckStrategy();
+      if(CopyIndicators())
+         CheckStrategy();
    }
    
    ManagePosition();
+}
+
+//+------------------------------------------------------------------+
+bool CopyIndicators()
+{
+   if(CopyBuffer(handle_rsi, 0, 0, 1, buffer_rsi) <= 0) return false;
+   if(CopyBuffer(handle_atr, 0, 0, 1, buffer_atr) <= 0) return false;
+   return true;
 }
 
 //+------------------------------------------------------------------+
@@ -76,21 +90,21 @@ void CheckStrategy()
       return;
    
    double price = iClose(_Symbol, PERIOD_CURRENT, 0);
-   double rsi = iRSIOnArray(0, 0, RSI_Period, PRICE_CLOSE, 0);
-   double atr = iATROnArray(0, 0, ATR_Period, 0);
+   double rsi = buffer_rsi[0];
+   double atr = buffer_atr[0];
    
    // Calcular soporte y resistencia
-   double support = 0;
-   double resistance = 0;
+   double support = price;
+   double resistance = price;
    
    for(int i = 1; i <= Lookback; i++)
    {
       double low = iLow(_Symbol, PERIOD_CURRENT, i);
       double high = iHigh(_Symbol, PERIOD_CURRENT, i);
       
-      if(support == 0 || low < support)
+      if(low < support)
          support = low;
-      if(resistance == 0 || high > resistance)
+      if(high > resistance)
          resistance = high;
    }
    
@@ -99,18 +113,15 @@ void CheckStrategy()
    bool sell_signal = false;
    
    // BUY: toca soporte + RSI > 50 + precio recupera
-   double touch_support = MathAbs(price - support);
-   if(touch_support <= atr * 0.3 && rsi > 50)
+   if(MathAbs(price - support) <= atr * 0.3 && rsi > 50)
    {
-      // Verificar que el precio se recupera del soporte
       double prev_price = iClose(_Symbol, PERIOD_CURRENT, 1);
       if(price > prev_price)
          buy_signal = true;
    }
    
    // SELL: toca resistencia + RSI < 50 + precio baja
-   double touch_resistance = MathAbs(price - resistance);
-   if(touch_resistance <= atr * 0.3 && rsi < 50)
+   if(MathAbs(price - resistance) <= atr * 0.3 && rsi < 50)
    {
       double prev_price = iClose(_Symbol, PERIOD_CURRENT, 1);
       if(price < prev_price)
@@ -142,7 +153,8 @@ void OpenPosition(string type, double price, double atr)
    }
    
    int ticket = OrderSend(_Symbol, type == "BUY" ? ORDER_TYPE_BUY : ORDER_TYPE_SELL,
-                          LotSize, price, 10, sl, tp, "PriceStructure", MagicNumber, 0, type == "BUY" ? clrGreen : clrRed);
+                          LotSize, price, 10, sl, tp, "PriceStructure", MagicNumber, 0, 
+                          type == "BUY" ? clrGreen : clrRed);
    
    if(ticket > 0)
    {
@@ -168,7 +180,6 @@ void ManagePosition()
    double price = OrderOpenPrice();
    double current = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double sl = OrderStopLoss();
-   double profit = OrderProfit();
    
    // Trailing SL
    if(position_type == "BUY" && current > price + 0.75)

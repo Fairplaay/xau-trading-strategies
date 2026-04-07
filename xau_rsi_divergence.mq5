@@ -1,7 +1,7 @@
 //+------------------------------------------------------------------+
 //| xau_rsi_divergence.mq5 - Estrategia RSI Divergence              |
-//| BUY: precio hace nuevo mínimo pero RSI hace mínimo mayor       |
-//| SELL: precio hace nuevo máximo pero RSI hace máximo menor        |
+//| BUY: precio hace nuevo mínimo pero RSI hace mínimo mayor        |
+//| SELL: precio hace nuevo máximo pero RSI hace máximo menor       |
 //+------------------------------------------------------------------+
 
 #property copyright "Kilito"
@@ -9,21 +9,23 @@
 #property strict
 
 //--- Inputs
-input string InpDataFile = "xau_data.json";
 input string InpSignalFile = "xau_signals.json";
 input double LotSize = 0.01;
 input int    RSI_Period = 14;
-input int    Lookback = 20;       // Ventana para buscar divergencia
+input int    Lookback = 20;
 input int    ATR_Period = 14;
 input int    MagicNumber = 123458;
 
-//--- SL/TP (scalping)
+//--- SL/TP
 input double SL_ATR_Multiplier = 0.5;
 input double TP_ATR_Multiplier = 1.5;
 
 //--- Handles
 int handle_rsi = INVALID_HANDLE;
 int handle_atr = INVALID_HANDLE;
+
+//--- Buffers
+double buffer_rsi[], buffer_atr[];
 
 //--- State
 datetime last_bar_time = 0;
@@ -42,6 +44,9 @@ int OnInit()
       Print("ERROR: No se pudieron crear los indicadores");
       return INIT_FAILED;
    }
+   
+   ArraySetAsSeries(buffer_rsi, true);
+   ArraySetAsSeries(buffer_atr, true);
    
    Print("xau_rsi_divergence iniciado");
    return INIT_SUCCEEDED;
@@ -63,10 +68,19 @@ void OnTick()
    if(curr_time != last_bar_time)
    {
       last_bar_time = curr_time;
-      CheckStrategy();
+      if(CopyIndicators())
+         CheckStrategy();
    }
    
    ManagePosition();
+}
+
+//+------------------------------------------------------------------+
+bool CopyIndicators()
+{
+   if(CopyBuffer(handle_rsi, 0, 0, Lookback + 1, buffer_rsi) <= 0) return false;
+   if(CopyBuffer(handle_atr, 0, 0, 1, buffer_atr) <= 0) return false;
+   return true;
 }
 
 //+------------------------------------------------------------------+
@@ -76,20 +90,19 @@ void CheckStrategy()
       return;
    
    double price = iClose(_Symbol, PERIOD_CURRENT, 0);
-   double rsi = iRSIOnArray(0, 0, RSI_Period, PRICE_CLOSE, 0);
-   double atr = iATROnArray(0, 0, ATR_Period, 0);
+   double rsi = buffer_rsi[0];
+   double atr = buffer_atr[0];
    
-   // Encontrar precio mínimo y RSI mínimo en ventana anterior (5-20 velas atrás)
+   // Encontrar mínimos y máximos en ventana pasada (5-20 velas atrás)
    double min_price = price;
    double min_rsi = rsi;
    double max_price = price;
    double max_rsi = rsi;
    
-   // Buscar en ventana pasada
    for(int i = 5; i < Lookback; i++)
    {
       double p = iClose(_Symbol, PERIOD_CURRENT, i);
-      double r = iRSIOnArray(0, 0, RSI_Period, PRICE_CLOSE, i);
+      double r = buffer_rsi[i];
       
       if(p < min_price)
          min_price = p;
@@ -105,24 +118,18 @@ void CheckStrategy()
    bool buy_signal = false;
    bool sell_signal = false;
    
-   // BUY: Divergencia positiva
-   // Precio hace nuevo mínimo, pero RSI hace mínimo mayor (no tan bajo)
-   if(price < min_price + atr * 0.5)  // Precio cerca de mínimo
+   // BUY: Divergencia positiva - precio cerca de mínimo pero RSI no tan bajo
+   if(price < min_price + atr * 0.5)
    {
-      if(rsi > min_rsi + 5)  // RSI no tan bajo = divergencia positiva
-      {
+      if(rsi > min_rsi + 5)
          buy_signal = true;
-      }
    }
    
-   // SELL: Divergencia negativa
-   // Precio hace nuevo máximo, pero RSI hace máximo menor
-   if(price > max_price - atr * 0.5)  // Precio cerca de máximo
+   // SELL: Divergencia negativa - precio cerca de máximo pero RSI no tan alto
+   if(price > max_price - atr * 0.5)
    {
-      if(rsi < max_rsi - 5)  // RSI no tan alto = divergencia negativa
-      {
+      if(rsi < max_rsi - 5)
          sell_signal = true;
-      }
    }
    
    if(buy_signal)
@@ -150,7 +157,8 @@ void OpenPosition(string type, double price, double atr)
    }
    
    int ticket = OrderSend(_Symbol, type == "BUY" ? ORDER_TYPE_BUY : ORDER_TYPE_SELL,
-                          LotSize, price, 10, sl, tp, "RSIDivergence", MagicNumber, 0, type == "BUY" ? clrGreen : clrRed);
+                          LotSize, price, 10, sl, tp, "RSIDivergence", MagicNumber, 0, 
+                          type == "BUY" ? clrGreen : clrRed);
    
    if(ticket > 0)
    {
