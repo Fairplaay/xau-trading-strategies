@@ -15,18 +15,31 @@ class Features:
     """Crea features para el modelo ML."""
     
     def __init__(self):
+        # Los 18 features (para estrategia sin_reglas)
         self.feature_names = [
+            # Originales (6)
             'rsi',
             'ema50_position',
             'ema200_position',
             'ema50_ema200_diff',
             'atr',
-            'atr_position',
             'trend',
-            'rsi_change',
-            'price_change',
-            'volatility',
-            'volume_avg',
+            # Nuevos (12)
+            'return_1d',
+            'return_5d',
+            'volatility_5',
+            'volatility_15',
+            'macd',
+            'macd_signal',
+            'bb_upper',
+            'bb_lower',
+            'bb_width',
+            'stoch_k',
+            'stoch_d',
+            'adx',
+            'momentum_5',
+            'hour_of_day',
+            'day_of_week',
         ]
     
     def calculate_from_rates(self, rates: List[List]) -> pd.DataFrame:
