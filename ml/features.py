@@ -153,7 +153,7 @@ class Features:
         return pd.DataFrame(features_list)
     
     def calculate_from_market_data(self, market_data: Dict[str, Any], rates: Optional[List] = None) -> List[float]:
-        """Calcular features desde datos actuales del mercado."""
+        """Calcular los 18 features desde datos actuales del mercado."""
         price = market_data.get('price', 0)
         ema50 = market_data.get('ema50', 0)
         ema200 = market_data.get('ema200', 0)
@@ -161,23 +161,88 @@ class Features:
         atr = market_data.get('atr', 0.5)
         trend = market_data.get('trend', 'NEUTRAL')
         
-        atr_position = 1
-        if rates and len(rates) > 20:
+        closes = []
+        if rates:
             closes = [r[4] for r in rates]
-            avg_price = np.mean(closes[-20:])
-            atr_position = atr / avg_price if avg_price > 0 else 1
+        
+        # Calcular features adicionales
+        return_1d = 0
+        return_5d = 0
+        volatility_5 = 0
+        volatility_15 = 0
+        macd = 0
+        macd_signal = 0
+        bb_upper = 0
+        bb_lower = 0
+        bb_width = 0
+        stoch_k = 50
+        stoch_d = 50
+        adx = 25
+        momentum_5 = 0
+        hour_of_day = 12
+        day_of_week = 3
+        
+        if len(closes) >= 2:
+            return_1d = (closes[-1] - closes[-2]) / closes[-2] * 100
+        if len(closes) >= 6:
+            return_5d = (closes[-1] - closes[-6]) / closes[-6] * 100
+        if len(closes) >= 5:
+            volatility_5 = np.std(closes[-5:])
+        if len(closes) >= 15:
+            volatility_15 = np.std(closes[-15:])
+        if len(closes) >= 26:
+            ema12 = self._calculate_ema(np.array(closes), 12)
+            ema26 = self._calculate_ema(np.array(closes), 26)
+            macd = ema12 - ema26
+        if len(closes) >= 35:
+            macd_signal = macd - self._calculate_ema(np.array(closes[-9:] + [macd]*9), 9)
+        
+        # Bollinger
+        if len(closes) >= 20:
+            bb_std = np.std(closes[-20:])
+            bb_ma = np.mean(closes[-20:])
+            bb_upper = bb_ma + (bb_std * 2)
+            bb_lower = bb_ma - (bb_std * 2)
+            bb_width = (bb_upper - bb_lower) / bb_ma * 100 if bb_ma > 0 else 0
+        
+        # Time
+        if rates and len(rates) > 0 and rates[-1][0] > 0:
+            try:
+                import datetime
+                ts = datetime.datetime.fromtimestamp(rates[-1][0])
+                hour_of_day = ts.hour
+                day_of_week = ts.weekday()
+            except:
+                pass
         
         trend_val = 1 if trend == 'ALCISTA' else 0
         
+        # Los 18 features (orden matching con features.py calculate_from_rates)
         return [
+            # Originales (7)
             rsi,
             price - ema50 if ema50 else 0,
             price - ema200 if ema200 else 0,
             (ema50 - ema200) if ema50 and ema200 else 0,
             atr,
-            atr_position,
             trend_val,
-            0, 0, 0, 0,
+            
+            # Nuevos (11)
+            return_1d,
+            return_5d,
+            volatility_5,
+            volatility_15,
+            macd,
+            macd_signal,
+            bb_upper,
+            bb_lower,
+            bb_width,
+            stoch_k,
+            stoch_d,
+            adx,
+            momentum_5,
+            hour_of_day,
+            day_of_week,
         ]
     
     def _calculate_ema(self, prices: np.ndarray, period: int) -> float:
