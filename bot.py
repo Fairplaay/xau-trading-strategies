@@ -41,8 +41,9 @@ else:
 class TradingBot:
     """Bot de trading con ML."""
     
-    def __init__(self, model_path: str = "modelo_xau.pkl"):
+    def __init__(self, model_path: str = "modelo_xau.pkl", label_strategy: str = "ema_rsi"):
         self.model_path = model_path
+        self.label_strategy = label_strategy
         self.running = False
         
         # Componentes
@@ -127,11 +128,16 @@ class TradingBot:
         
         print(f"   Usando: {data_path}")
         
-        # Entrenar
-        trainer = Trainer(self.model_path)
+        # Entrenar con la estrategia de labels seleccionada
+        from ml.trainer import LABEL_STRATEGIES
+        strategy_name = LABEL_STRATEGIES.get(self.label_strategy, self.label_strategy)
+        print(f"📋 Estrategia de labels: {strategy_name}")
+        
+        trainer = Trainer(self.model_path, label_strategy=self.label_strategy)
         try:
             results = trainer.train_from_json(data_path)
             print("\n✅ Modelo entrenado!")
+            print(f"   Estrategia: {results['label_strategy']}")
             print(f"   Test Accuracy: {results['test_accuracy']:.2%}")
             print(f"   CV Score: {results['cv_mean']:.2%}")
             
@@ -362,12 +368,15 @@ def main():
                         help="Entrenar modelo antes de iniciar")
     parser.add_argument("--model", default="modelo_xau.pkl",
                         help="Ruta al modelo")
+    parser.add_argument("--strategy", default="ema_rsi",
+                        choices=["ema_rsi", "price_structure"],
+                        help="Estrategia de labels: ema_rsi, price_structure")
     parser.add_argument("--no-validate", action="store_true",
                         help="Saltar validación de config")
     
     args = parser.parse_args()
     
-    bot = TradingBot(model_path=args.model)
+    bot = TradingBot(model_path=args.model, label_strategy=args.strategy)
     bot.run()
 
 

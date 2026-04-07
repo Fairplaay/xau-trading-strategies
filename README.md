@@ -15,7 +15,8 @@ cp .env.example .env
 # 3. Ejecutar EA en MT5 (xau.mq5) - genera xau_data.json
 
 # 4. Entrenar modelo (necesita datos del EA)
-python bot.py --train
+python bot.py --train --strategy ema_rsi
+# o: python bot.py --train --strategy price_structure
 
 # 5. Ejecutar bot
 python bot.py
@@ -140,9 +141,17 @@ Usa el modelo `modelo_xau.pkl` existente.
 
 ### Opciones
 ```bash
-python bot.py --train              # Entrenar antes de ejecutar
-python bot.py --model mi_modelo.pkl  # Usar modelo específico
+python bot.py --train                     # Entrenar antes de ejecutar
+python bot.py --model mi_modelo.pkl       # Usar modelo específico
+python bot.py --strategy price_structure   # Usar estrategia price structure
 ```
+
+## 🎯 Estrategias de labels
+
+| Estrategia | Descripción |
+|-----------|-------------|
+| `ema_rsi` | BUY: precio > EMA200 Y RSI 45-70, SELL: precio < EMA200 Y RSI 30-55 |
+| `price_structure` | BUY: precio toca soporte, SELL: precio toca resistencia |
 
 ## 🎯 Flujo completo
 
