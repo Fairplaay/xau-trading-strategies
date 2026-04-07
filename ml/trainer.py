@@ -164,23 +164,32 @@ class Trainer:
         
         self.feature_names = list(features_df.columns)
         
-        # Dividir datos
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=42, shuffle=True
-        )
+        # Dividir datos - CHRONOLOGICAL SPLIT (sin shuffle para trading)
+        # NO usamos train_test_split con shuffle porque eso causa overfitting
+        # En trading, solo entrenamos con datos PASADOS y test con datos FUTUROS
+        split_idx = int(len(X) * (1 - test_size))
+        
+        X_train = X.iloc[:split_idx]
+        X_test = X.iloc[split_idx:]
+        y_train = y[:split_idx]
+        y_test = y[split_idx:]
+        
+        print(f"   Train: {len(X_train)} samples (pasado)")
+        print(f"   Test: {len(X_test)} samples (futuro)")
         
         # Entrenar
-        print("🤖 Entrenando RandomForest (optimizado)...")
+        print("🤖 Entrenando RandomForest (regularizado para evitar overfitting)...")
         self.model = RandomForestClassifier(
-            n_estimators=50,         # Reducido de 100 para más velocidad
-            max_depth=8,              # Reducido de 10
-            min_samples_split=10,     # Aumentado de 5
-            min_samples_leaf=5,        # Aumentado de 2
+            n_estimators=30,         # Reducido para evitar overfitting
+            max_depth=5,            # Reducido de 8 - menos complejo
+            min_samples_split=20,   # Aumentado - más estable
+            min_samples_leaf=10,    # Aumentado - evitar ruido
+            max_features='sqrt',     # Solo sqrt de features por árbol
             n_jobs=-1,
             warm_start=False,
             random_state=42,
             class_weight='balanced',
-            verbose=1
+            verbose=0  # Silencioso
         )
         
         self.model.fit(X_train, y_train)
