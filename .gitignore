@@ -1,6 +1,6 @@
 # Logs
 *.log
-
+operaciones.json
 # Python
 __pycache__/
 *.py[cod]
@@ -30,3 +30,4 @@ npm-debug.log*
 test_ia.py
 test_*.py
 cache/
+*.pkl

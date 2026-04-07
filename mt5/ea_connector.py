@@ -218,7 +218,7 @@ class EAConnector:
             "sl": round(sl, 2) if sl else 0,
             "tp": round(tp, 2) if tp else 0,
             "ticket": ticket,
-            "timestamp": datetime.now(VET).strftime("%Y-%m-%d %H:%M:%S")
+            "timestamp": datetime.now(VET).strftime("%Y.%m.%d %H:%M:%S")
         }
         
         try:

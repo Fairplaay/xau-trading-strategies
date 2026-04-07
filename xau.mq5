@@ -14,7 +14,7 @@ input int    RSI_Period = 14;
 input int    EMA50_Period = 50;
 input int    EMA200_Period = 200;
 input int    ATR_Period = 14;
-input int    BarsToSave = 1000; // Cambiado de 200 a 1000 para ML
+input int    BarsToSave = 10000; // Cambiado de 200 a 1000 para ML
 
 //--- Handles
 int handle_rsi = INVALID_HANDLE;
@@ -59,16 +59,17 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
 {
-   // Procesar comandos
-   ProcessCommand();
-   
-   // Escribir datos cuando cambia vela
-   datetime curr_time = iTime(_Symbol, PERIOD_CURRENT, 0);
-   if(curr_time != last_bar_time)
-   {
-      last_bar_time = curr_time;
-      WriteData();
-   }
+    // DEBUG: verificar que OnTick se ejecuta
+    // ProcessCommand() en cada tick para detectar comandos inmediatamente
+    ProcessCommand();
+    
+    // Escribir datos cuando cambia vela
+    datetime curr_time = iTime(_Symbol, PERIOD_CURRENT, 0);
+    if(curr_time != last_bar_time)
+    {
+       last_bar_time = curr_time;
+       WriteData();
+    }
 }
 
 //+------------------------------------------------------------------+
@@ -131,23 +132,25 @@ void ProcessCommand()
    double tp = GetDoubleValue(data, "tp");
    double tk = GetDoubleValue(data, "ticket");
    
-   // Ejecutar comando
-   string result = "OK";
-   int ticket = 0;
-   
-   if(action == "BUY")
-      ticket = (int)Trade(ORDER_TYPE_BUY, vol, sl, tp);
-   else if(action == "SELL")
-      ticket = (int)Trade(ORDER_TYPE_SELL, vol, sl, tp);
-   else if(action == "CLOSE")
-      result = ClosePos((int)tk) ? "OK" : "FAIL";
-   else if(action == "MODIFY")
-      result = ModifySLTP((int)tk, sl, tp) ? "OK" : "FAIL";
-   else
-      result = "UNKNOWN";
-   
-   Print("CMD: ", action, " -> ", result);
-   ClearCommandFile();
+    // Ejecutar comando
+    string result = "OK";
+    int ticket = 0;
+    
+    Print("CMD: action=", action, " vol=", vol, " sl=", sl, " tp=", tp);
+    
+    if(action == "BUY")
+       ticket = (int)Trade(ORDER_TYPE_BUY, vol, sl, tp);
+    else if(action == "SELL")
+       ticket = (int)Trade(ORDER_TYPE_SELL, vol, sl, tp);
+    else if(action == "CLOSE")
+       result = ClosePos((int)tk) ? "OK" : "FAIL";
+    else if(action == "MODIFY")
+       result = ModifySLTP((int)tk, sl, tp) ? "OK" : "FAIL";
+    else
+       result = "UNKNOWN";
+    
+    Print("CMD: ", action, " -> result=", result, " ticket=", ticket);
+    ClearCommandFile();
 }
 
 //+------------------------------------------------------------------+
@@ -200,11 +203,11 @@ ulong Trade(ENUM_ORDER_TYPE dir, double lot, double sl, double tp)
    req.type_time = ORDER_TIME_GTC;
    req.type_filling = ORDER_FILLING_IOC;
    
-   if(OrderSend(req, res) && res.retcode == TRADE_RETCODE_DONE)
-      return res.order;
-   
-   Print("Trade ERROR: ", res.retcode);
-   return 0;
+    if(OrderSend(req, res) && res.retcode == TRADE_RETCODE_DONE)
+       return res.order;
+    
+    Print("Trade ERROR: ", res.retcode, " - ", res.comment);
+    return 0;
 }
 
 //+------------------------------------------------------------------+
@@ -287,13 +290,18 @@ void WriteData()
    if(CopyBuffer(handle_ema200, 0, 0, 1, ema200) < 1) return;
    if(CopyBuffer(handle_atr, 0, 0, 1, atr) < 1) return;
    
-   // Obtener velas
-   MqlRates rates[];
-   int copied = CopyRates(_Symbol, PERIOD_CURRENT, 0, BarsToSave, rates);
-   if(copied < 100)
-      return;
-   
-   // Escribir archivo
+    // Obtener velas (escribir aunque sea menos de 100 para debug)
+    MqlRates rates[];
+    int copied = CopyRates(_Symbol, PERIOD_CURRENT, 0, BarsToSave, rates);
+    if(copied < 1)
+    {
+       Print("DEBUG: No se pudieron obtener velas");
+       return;
+    }
+    
+    Print("DEBUG: WriteData - copied ", copied, " velas");
+    
+    // Escribir archivo
    int h = FileOpen(InpDataFile, FILE_WRITE|FILE_TXT|FILE_ANSI);
    if(h == INVALID_HANDLE)
       return;
