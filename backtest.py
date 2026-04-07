@@ -131,9 +131,9 @@ class Backtest:
             
             # Si no hay posición, abrir nueva
             if not position and prediction != "NADA":
-                # Calcular SL/TP
-                sl_dist = max(0.25, min(atr * 1.5, 1.0))
-                tp_dist = max(0.25, min(atr * 1.5, 2.0))
+                # Usar mismo SL/TP que el label profesional (3:1 ratio)
+                sl_dist = max(0.25, atr * 1.5)
+                tp_dist = max(0.75, atr * 4.5)  # 3:1 ratio
                 
                 if prediction == "BUY":
                     position = {
