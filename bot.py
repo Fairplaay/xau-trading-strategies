@@ -113,7 +113,9 @@ class TradingBot:
         data_paths = [
             "xau_data.json",
             os.path.expanduser("~/Documentos/trading/xau_data.json"),
+            os.path.join(Config.EA_FILE_PATH, "xau_data.json") if Config.EA_FILE_PATH else None,
         ]
+        data_paths = [p for p in data_paths if p]  # filtrar None
         
         data_path = None
         for path in data_paths:
