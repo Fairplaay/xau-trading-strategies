@@ -298,7 +298,7 @@ class LabelStrategyManager:
         no reglas deterministas.
         """
         labels = ['NADA'] * 50
-        lookahead = 10  # 10 velas adelante (profesional)
+        lookahead = 5  # 5 minutos para scalping M1
         
         for i in range(50, len(rates) - lookahead - 1):
             closes = [r[4] for r in rates[:i+1]]
@@ -308,17 +308,15 @@ class LabelStrategyManager:
             window = rates[:i+1]
             atr = self._atr(window, 14)
             
-            # Risk/Reward profesional: 3:1 ratio
-            # SL = 1.5x ATR (riesgo)
-            # TP = 4.5x ATR (recompensa 3:1)
-            sl_distance = max(0.25, atr * 1.5)
-            tp_distance = max(0.75, atr * 4.5)  # 3:1 ratio
+            # Scalping M1: SL muy ajustado, TP 3:1
+            sl_distance = max(0.10, atr * 0.5)  # SL pequeño
+            tp_distance = max(0.30, atr * 1.5)   # TP 3:1
             
             entry = current
             sl_level = entry - sl_distance
             tp_level = entry + tp_distance
             
-            # Buscar en las próximas 10 velas cuál se toca primero
+            # Buscar en las próximas 5 velas
             future_closes = closes[1:lookahead+1]
             
             hit_tp = False

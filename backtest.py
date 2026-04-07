@@ -129,11 +129,11 @@ class Backtest:
                         self._close_trade(position, current_price, "TP")
                         position = None
             
-            # Si no hay posición, abrir nueva
+            # Si no hay posición, abrir nueva (scalping M1)
             if not position and prediction != "NADA":
-                # Usar mismo SL/TP que el label profesional (3:1 ratio)
-                sl_dist = max(0.25, atr * 1.5)
-                tp_dist = max(0.75, atr * 4.5)  # 3:1 ratio
+                # Scalping: SL pequeño, TP 3:1
+                sl_dist = max(0.10, atr * 0.5)
+                tp_dist = max(0.30, atr * 1.5)
                 
                 if prediction == "BUY":
                     position = {

@@ -249,13 +249,13 @@ class Trainer:
     
     def _create_labels_sin_reglas(self, rates: List[List]) -> List[str]:
         """
-        Labels profesionales basados en SL/TP (3:1 ratio):
-        - BUY: toca TP antes que SL
+        Labels profesionales para SCALPING M1 (ratio 3:1):
+        - BUY: toca TP (1.5x ATR) antes que SL (0.5x ATR)
         - SELL: toca SL antes que TP
-        - NADA: no toca ni SL ni TP en 10 velas
+        - NADA: no toca ninguno en 5 velas
         """
         labels = ['NADA'] * 50
-        lookahead = 10  # 10 velas (más realista)
+        lookahead = 5  # 5 minutos para scalping
         
         for i in range(50, len(rates) - lookahead - 1):
             closes = [r[4] for r in rates[:i+1]]
@@ -264,14 +264,14 @@ class Trainer:
             # Calcular ATR para SL/TP
             atr = self._calculate_atr(rates[:i+1], 14)
             
-            # Risk/Reward 3:1
-            sl_distance = max(0.25, atr * 1.5)
-            tp_distance = max(0.75, atr * 4.5)  # 3:1
+            # Scalping: SL pequeño, TP 3:1
+            sl_distance = max(0.10, atr * 0.5)  # SL muy ajustado
+            tp_distance = max(0.30, atr * 1.5)  # TP 3:1
             
             sl_level = current - sl_distance
             tp_level = current + tp_distance
             
-            # Buscar en las próximas 10 velas
+            # Buscar en las próximas 5 velas
             future_closes = closes[1:lookahead+1]
             
             hit_tp = False
