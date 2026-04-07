@@ -110,6 +110,13 @@ class LabelStrategyManager:
             'file': '__builtin__',
             'function': self._create_labels_emas
         }
+        
+        self.strategies['rsi_divergence'] = {
+            'name': 'RSI Divergencia',
+            'description': 'Divergencia RSI: precio nuevo minimo pero RSI hace minimo mayor = BUY',
+            'file': '__builtin__',
+            'function': self._create_labels_rsi_divergence
+        }
     
     def _load_custom(self):
         """Cargar estrategias personalizadas desde archivo."""
@@ -219,6 +226,57 @@ class LabelStrategyManager:
             # Señales SELL: tendencia bajista + RSI neutral + (toca EMA50 O rompe mínimo)
             elif trend_down and rsi_ok and (touch_ema50 or break_low):
                 labels.append('SELL')
+            else:
+                labels.append('NADA')
+        
+        while len(labels) < len(rates):
+            labels.append('NADA')
+        return labels[:len(rates)]
+    
+    def _create_labels_rsi_divergence(self, rates):
+        """
+        Estrategia RSI Divergencia:
+        - BUY: Precio hace nuevo MÍNIMO pero RSI hace MÍNIMO MAYOR (divergencia positiva)
+        - SELL: Precio hace nuevo MÁXIMO pero RSI hace MÁXIMO MENOR (divergencia negativa)
+        """
+        labels = ['NADA'] * 50
+        
+        for i in range(50, len(rates) - 1):
+            closes = [r[4] for r in rates[:i+1]]
+            current = closes[-1]
+            
+            # Calcular RSI actual y anteriores
+            rsi_now = self._rsi(closes, 14)
+            
+            # Encontrar mínimo/máximo de precio en ventanas anteriores
+            lookback = 20
+            
+            # Mínimo de precio y RSI en ventana anterior (hace 5-20 velas)
+            if len(closes) > 25:
+                prev_window = closes[-lookback:-5]
+                prev_rsi_window = [self._rsi(closes[:j], 14) for j in range(len(closes)-lookback, len(closes)-5)]
+                
+                price_min_prev = min(prev_window) if prev_window else current
+                price_max_prev = max(prev_window) if prev_window else current
+                rsi_min_prev = min(prev_rsi_window) if prev_rsi_window else rsi_now
+                rsi_max_prev = max(prev_rsi_window) if prev_rsi_window else rsi_now
+                
+                # Precio actual vs anterior
+                current_is_lower = current < price_min_prev
+                current_is_higher = current > price_max_prev
+                
+                # RSI actual vs anterior
+                rsi_higher_low = rsi_now > rsi_min_prev
+                rsi_lower_high = rsi_now < rsi_max_prev
+                
+                # BUY: Divergencia positiva (precio baja, RSI sube)
+                if current_is_lower and rsi_higher_low:
+                    labels.append('BUY')
+                # SELL: Divergencia negativa (precio sube, RSI baja)
+                elif current_is_higher and rsi_lower_high:
+                    labels.append('SELL')
+                else:
+                    labels.append('NADA')
             else:
                 labels.append('NADA')
         

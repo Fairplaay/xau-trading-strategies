@@ -152,6 +152,7 @@ python bot.py --strategy price_structure   # Usar estrategia price structure
 |-----------|-------------|
 | `emas` | BUY: precio > EMA200 + RSI 40-60 + (toca EMA50 O rompe máximo), SELL: inverso |
 | `price_structure` | BUY: precio toca soporte, SELL: precio toca resistencia |
+| `rsi_divergence` | BUY: precio nuevo mínimo pero RSI hace mínimo mayor, SELL: inverso |
 
 ## 🎯 Flujo completo
 

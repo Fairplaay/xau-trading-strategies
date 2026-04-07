@@ -28,7 +28,8 @@ from .labels import LabelStrategyManager
 # Estrategias de labels disponibles
 LABEL_STRATEGIES = {
     'emas': 'EMAs (Triple Confirmación) - EMA200 + RSI + EMA50/breaks',
-    'price_structure': 'Price Structure (soporte/resistencia)'
+    'price_structure': 'Price Structure (soporte/resistencia)',
+    'rsi_divergence': 'RSI Divergencia (precio nuevo minimo/maximo pero RSI opposite)'
 }
 
 
