@@ -256,39 +256,10 @@ class TradingBot:
     def check_position(self) -> dict:
         """Verificar si hay posición abierta en MT5."""
         try:
-            # Intentar primero con MT5 directo
-            try:
-                import MetaTrader5 as mt5
-                mt5.initialize()
-                
-                positions = mt5.positions_get()
-                
-                if positions is None or len(positions) == 0:
-                    return {"has_position": False, "closed": False}
-                
-                for pos in positions:
-                    if pos.symbol == Config.SYMBOL:
-                        return {
-                            "has_position": True,
-                            "ticket": pos.ticket,
-                            "type": "BUY" if pos.type == 0 else "SELL",
-                            "open_price": pos.price_open,
-                            "profit": pos.profit,
-                            "sl": pos.sl,
-                            "tp": pos.tp,
-                            "closed": False,
-                            "close_reason": None
-                        }
-                
-                return {"has_position": False, "closed": False}
-                
-            except ImportError:
-                # Fallback: usar EA connector
-                positions = self.mt5.get_positions()
-                
-                if not positions or len(positions) == 0:
-                    return {"has_position": False, "closed": False}
-                
+            # Primero intentar con EA (funciona en Linux/Wine)
+            positions = self.mt5.get_positions()
+            
+            if positions and len(positions) > 0:
                 for pos in positions:
                     if pos.get("symbol") == Config.SYMBOL:
                         return {
@@ -302,8 +273,8 @@ class TradingBot:
                             "closed": False,
                             "close_reason": None
                         }
-                
-                return {"has_position": False, "closed": False}
+            
+            return {"has_position": False, "closed": False}
             
         except Exception as e:
             print(f"⚠️ Error verificando posición: {e}")
