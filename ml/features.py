@@ -12,7 +12,7 @@ class Features:
     """Crea features para el modelo ML (version vectorizada rapida)."""
     
     def __init__(self):
-        # Los 18 features (para estrategia sin_reglas)
+        # Los 21 features (todos los que calcula)
         self.feature_names = [
             # Originales (6)
             'rsi',
@@ -21,7 +21,7 @@ class Features:
             'ema50_ema200_diff',
             'atr',
             'trend',
-            # Nuevos (12)
+            # Nuevos (15)
             'return_1d',
             'return_5d',
             'volatility_5',
