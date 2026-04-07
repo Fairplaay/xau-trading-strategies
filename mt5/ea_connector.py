@@ -194,6 +194,31 @@ class EAConnector:
         """Obtener todos los datos del EA."""
         return self._read_data()
     
+    def get_positions(self) -> list:
+        """Obtener posiciones abiertas desde el JSON del EA."""
+        data = self._read_data()
+        if not data:
+            return []
+        
+        positions = data.get("positions", [])
+        if not positions:
+            return []
+        
+        # Convertir al formato que espera el bot
+        result = []
+        for pos in positions:
+            result.append({
+                "symbol": data.get("symbol", "XAUUSD"),
+                "ticket": pos.get("ticket", 0),
+                "type": pos.get("type", "SELL"),
+                "open_price": pos.get("open_price", 0),
+                "profit": pos.get("profit", 0),
+                "sl": pos.get("sl", 0),
+                "tp": pos.get("tp", 0)
+            })
+        
+        return result
+    
     def get_last_command_result(self) -> str:
         """Obtener resultado del último comando."""
         return self.last_command_result

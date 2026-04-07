@@ -319,6 +319,32 @@ void WriteData()
    FileWriteString(h, "  \"atr14\":" + DoubleToString(atr[0], 2) + ",\n");
    FileWriteString(h, "  \"timestamp\":\"" + ts + "\",\n");
    FileWriteString(h, "  \"last_cmd\":\"" + TimeToString(last_cmd_time, TIME_DATE|TIME_SECONDS) + "\",\n");
+   
+   // Escribir posiciones abiertas
+   FileWriteString(h, "  \"positions\":[\n");
+   int total = PositionsTotal();
+   bool firstPos = true;
+   for(int i = 0; i < total; i++)
+   {
+      if(PositionSelectByIndex(i))
+      {
+         if(PositionGetSymbol(0) == _Symbol)
+         {
+            if(!firstPos) FileWriteString(h, ",\n");
+            firstPos = false;
+            FileWriteString(h, "    {");
+            FileWriteString(h, "\"ticket\":" + IntegerToString(PositionGetTicket(0)) + ",");
+            FileWriteString(h, "\"type\":\"" + (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY ? "BUY" : "SELL") + "\",");
+            FileWriteString(h, "\"open_price\":" + DoubleToString(PositionGetDouble(POSITION_PRICE_OPEN), 2) + ",");
+            FileWriteString(h, "\"profit\":" + DoubleToString(PositionGetDouble(POSITION_PROFIT), 2) + ",");
+            FileWriteString(h, "\"sl\":" + DoubleToString(PositionGetDouble(POSITION_SL), 2) + ",");
+            FileWriteString(h, "\"tp\":" + DoubleToString(PositionGetDouble(POSITION_TP), 2));
+            FileWriteString(h, "}");
+         }
+      }
+   }
+   FileWriteString(h, "\n  ],\n");
+   
    FileWriteString(h, "  \"velas\":[\n");
    
    for(int i = copied - 1; i >= 0; i--)
