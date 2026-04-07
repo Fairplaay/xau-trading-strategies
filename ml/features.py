@@ -64,23 +64,88 @@ class Features:
                 # ATR 14
                 atr = self._calculate_atr(window, 14)
                 
+                # Return 1d (retorno últimas 24 horas)
+                return_1d = (close[-1] - close[-2]) / close[-2] * 100 if len(close) >= 2 else 0
+                
+                # Return 5d
+                return_5d = (close[-1] - close[-6]) / close[-6] * 100 if len(close) >= 6 else 0
+                
+                # Volatilidad 5 y 15
+                volatility_5 = np.std(close[-5:]) if len(close) >= 5 else 0
+                volatility_15 = np.std(close[-15:]) if len(close) >= 15 else 0
+                
+                # MACD (12, 26, 9)
+                ema12 = self._calculate_ema(close, 12)
+                ema26 = self._calculate_ema(close, 26)
+                macd = ema12 - ema26
+                macd_signal = macd - self._calculate_ema(np.append(close[-9:], macd), 9) if len(close) >= 9 else macd
+                
+                # Bollinger Bands
+                bb_period = 20
+                bb_std = np.std(close[-bb_period:]) if len(close) >= bb_period else 0
+                bb_ma = np.mean(close[-bb_period:]) if len(close) >= bb_period else close[-1]
+                bb_upper = bb_ma + (bb_std * 2)
+                bb_lower = bb_ma - (bb_std * 2)
+                bb_width = (bb_upper - bb_lower) / bb_ma * 100 if bb_ma > 0 else 0
+                
+                # Stochastic (14, 3, 3)
+                stoch_k = 0
+                stoch_d = 0
+                if len(close) >= 14:
+                    low14 = np.min(low[-14:])
+                    high14 = np.max(high[-14:])
+                    stoch_k = ((close[-1] - low14) / (high14 - low14)) * 100 if (high14 - low14) > 0 else 50
+                    stoch_d = stoch_k  # Simplificado
+                
+                # ADX (14)
+                adx = self._calculate_adx(window, 14)
+                
+                # Momentum 5
+                momentum_5 = (close[-1] - close[-6]) / close[-6] * 100 if len(close) >= 6 else 0
+                
+                # Time features (desde timestamp)
+                if len(rates) > i and rates[i][0] > 0:
+                    import datetime
+                    try:
+                        ts = datetime.datetime.fromtimestamp(rates[i][0])
+                        hour_of_day = ts.hour
+                        day_of_week = ts.weekday()
+                    except:
+                        hour_of_day = 12
+                        day_of_week = 3
+                else:
+                    hour_of_day = 12
+                    day_of_week = 3
+                
                 # Posición actual
                 current_price = close[-1]
                 
-                # Features
+                # Features (los que usa la investigación)
                 features = {
+                    # Originales
                     'rsi': rsi,
                     'ema50_position': current_price - ema50,
                     'ema200_position': current_price - ema200,
                     'ema50_ema200_diff': ema50 - ema200,
                     'atr': atr,
-                    'atr_position': atr / np.mean(close[-10:-1]) if len(close) > 10 else 1,
                     'trend': 1 if current_price > ema200 else 0,
-                    # Simplificados: solo 1 vela en vez de 3-10
-                    'rsi_change': rsi - self._calculate_rsi(close[:-1], 14) if len(close) > 1 else 0,
-                    'price_change': (close[-1] - close[-2]) / close[-2] * 100 if len(close) >= 2 else 0,
-                    'volatility': (max(high[-5:]) - min(low[-5:])) / np.mean(close[-5:]) * 100,
-                    'volume_avg': np.mean(volume[-5:]),  # Reducido de 10 a 5
+                    
+                    # Nuevos de la investigación
+                    'return_1d': return_1d,
+                    'return_5d': return_5d,
+                    'volatility_5': volatility_5,
+                    'volatility_15': volatility_15,
+                    'macd': macd,
+                    'macd_signal': macd_signal,
+                    'bb_upper': bb_upper,
+                    'bb_lower': bb_lower,
+                    'bb_width': bb_width,
+                    'stoch_k': stoch_k,
+                    'stoch_d': stoch_d,
+                    'adx': adx,
+                    'momentum_5': momentum_5,
+                    'hour_of_day': hour_of_day,
+                    'day_of_week': day_of_week,
                 }
                 
                 features_list.append(features)
@@ -170,3 +235,43 @@ class Features:
             ))
         
         return np.mean(tr[-period:]) if tr else 0.5
+    
+    def _calculate_adx(self, df: pd.DataFrame, period: int = 14) -> float:
+        """Calcular ADX (Average Directional Index)."""
+        if len(df) < period + 2:
+            return 25  # Valor por defecto (tendencia neutral)
+        
+        # Calcular +DM y -DM
+        plus_dm = []
+        minus_dm = []
+        
+        for i in range(1, len(df)):
+            high = df.iloc[i]['high']
+            low = df.iloc[i]['low']
+            prev_high = df.iloc[i-1]['high']
+            prev_low = df.iloc[i-1]['low']
+            
+            up_move = high - prev_high
+            down_move = prev_low - low
+            
+            plus_dm.append(up_move if up_move > down_move and up_move > 0 else 0)
+            minus_dm.append(down_move if down_move > up_move and down_move > 0 else 0)
+        
+        # Calcular ATR
+        atr = self._calculate_atr(df, period)
+        
+        if atr == 0:
+            return 25
+        
+        # Calcular +DI y -DI
+        plus_di = (np.mean(plus_dm[-period:]) / atr) * 100
+        minus_di = (np.mean(minus_dm[-period:]) / atr) * 100
+        
+        # Calcular DX
+        di_sum = plus_di + minus_di
+        if di_sum == 0:
+            return 25
+        
+        dx = abs(plus_di - minus_di) / di_sum * 100
+        
+        return dx  # Esto es aproximadamente ADX (simplificado)

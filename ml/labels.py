@@ -117,6 +117,13 @@ class LabelStrategyManager:
             'file': '__builtin__',
             'function': self._create_labels_rsi_divergence
         }
+        
+        self.strategies['sin_reglas'] = {
+            'name': 'Sin Reglas (Resultado Futuro)',
+            'description': 'Label basado en precio futuro: si price[i+5] > price[i] + atr*0.3 = BUY',
+            'file': '__builtin__',
+            'function': self._create_labels_sin_reglas
+        }
     
     def _load_custom(self):
         """Cargar estrategias personalizadas desde archivo."""
@@ -280,6 +287,46 @@ class LabelStrategyManager:
                     labels.append('SELL')
                 else:
                     labels.append('NADA')
+            else:
+                labels.append('NADA')
+        
+        while len(labels) < len(rates):
+            labels.append('NADA')
+        return labels[:len(rates)]
+    
+    def _create_labels_sin_reglas(self, rates):
+        """
+        Estrategia SIN REGLAS - Label basado en resultado futuro.
+        
+        BUY: si price[i+5] >= price[i] + ATR*0.3
+        SELL: si price[i+5] <= price[i] - ATR*0.3
+        NADA: en cualquier otro caso
+        
+        El ML aprende patrones que predicen movimiento futuro,
+        no reglas deterministas.
+        """
+        labels = ['NADA'] * 50
+        lookahead = 5  # 5 velas adelante
+        
+        for i in range(50, len(rates) - lookahead - 1):
+            closes = [r[4] for r in rates[:i+1]]
+            current = closes[-1]
+            
+            # Calcular ATR para el threshold
+            window = rates[:i+1]
+            atr = self._atr(window, 14)
+            
+            # Threshold adaptativo basado en ATR
+            threshold = atr * 0.3
+            
+            # Precio futuro
+            future_price = closes[lookahead]
+            
+            # Label basado en resultado
+            if future_price >= current + threshold:
+                labels.append('BUY')
+            elif future_price <= current - threshold:
+                labels.append('SELL')
             else:
                 labels.append('NADA')
         
