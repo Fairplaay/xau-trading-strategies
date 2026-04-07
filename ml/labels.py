@@ -235,14 +235,6 @@ class LabelStrategyManager:
             labels.append('NADA')
         
         return labels[:len(rates)]
-                labels.append('SELL')
-            else:
-                labels.append('NADA')
-        
-        while len(labels) < len(rates):
-            labels.append('NADA')
-        return labels[:len(rates)]
-    
     def _create_labels_rsi_divergence(self, rates):
         """
         Estrategia RSI Divergencia:
