@@ -49,9 +49,9 @@ class Features:
         total = len(df)
         
         for i in range(50, len(df)):
-            # Progress cada 5000 velas
-            if (i - 50) % 5000 == 0:
-                print(f"   🔄 Creando features: {i - 50}/{total - 50} ({((i - 50) * 100 / (total - 50)):.0f}%)")
+            # Progress cada 1000 velas
+            if (i - 50) % 1000 == 0:
+                print(f"   🔄 Features: {i - 50}/{total - 50} ({((i - 50) * 100 / (total - 50)):.0f}%)")
             
             window = df.iloc[:i+1]
             
