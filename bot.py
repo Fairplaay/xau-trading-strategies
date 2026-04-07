@@ -18,6 +18,53 @@ from datetime import datetime
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
+# Constante para el archivo PID
+PID_FILE = "/tmp/xau_trading_bot.pid"
+
+def get_pid():
+    """Obtener PID del archivo."""
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE, 'r') as f:
+                return int(f.read().strip())
+        except:
+            return None
+    return None
+
+def is_running(pid: int) -> bool:
+    """Verificar si el proceso está corriendo."""
+    if pid is None:
+        return False
+    try:
+        os.kill(pid, 0)  # Signal 0 solo verifica si existe
+        return True
+    except OSError:
+        return False
+
+def check_already_running() -> bool:
+    """Verificar si ya hay una instancia corriendo."""
+    pid = get_pid()
+    if pid and is_running(pid):
+        print(f"❌ Ya hay una instancia del bot corriendo (PID: {pid})")
+        print(f"   Para detenerla: kill {pid}")
+        return True
+    
+    # Limpiar archivo PID huérfano si existe
+    if os.path.exists(PID_FILE):
+        os.remove(PID_FILE)
+    
+    return False
+
+def write_pid():
+    """Escribir PID al archivo."""
+    with open(PID_FILE, 'w') as f:
+        f.write(str(os.getpid()))
+
+def remove_pid():
+    """Eliminar archivo PID."""
+    if os.path.exists(PID_FILE):
+        os.remove(PID_FILE)
+
 from config import Config
 from news.calendar import NewsCalendar
 from memory import Memory
@@ -126,7 +173,7 @@ class TradingBot:
             os.path.expanduser("~/Documentos/trading/xau_data.json"),
             os.path.join(Config.EA_FILE_PATH, "xau_data.json") if Config.EA_FILE_PATH else None,
         ]
-        data_paths = [p for p in data_paths if p]  # filtrar None
+        data_paths = [p for p in data_paths if p]
         
         data_path = None
         for path in data_paths:
@@ -166,6 +213,7 @@ class TradingBot:
         print("\n🔄 Cerrando...")
         if hasattr(self, 'mt5') and self.mt5:
             self.mt5.disconnect()
+        remove_pid()
         print("✅ Listo")
     
     def get_market_data(self) -> dict:
@@ -256,7 +304,6 @@ class TradingBot:
     def check_position(self) -> dict:
         """Verificar si hay posición abierta en MT5."""
         try:
-            # Primero intentar con EA (funciona en Linux/Wine)
             positions = self.mt5.get_positions()
             
             if positions and len(positions) > 0:
@@ -283,7 +330,6 @@ class TradingBot:
     def close_position(self, ticket: int) -> bool:
         """Cerrar posición por ticket."""
         try:
-            # Intentar MT5 directo
             try:
                 import MetaTrader5 as mt5
                 result = mt5.order_close(ticket)
@@ -291,7 +337,6 @@ class TradingBot:
                     print(f"✅ Posición {ticket} cerrada")
                     return True
             except ImportError:
-                # Fallback: usar EA
                 result = self.mt5.close_position(ticket)
                 if result:
                     print(f"✅ Posición {ticket} cerrada")
@@ -328,10 +373,11 @@ class TradingBot:
         else:
             return {"sl": price + sl_distance, "tp": price - tp_distance}
     
-    def run(self):
+    def run(self, train_mode: bool = False):
         """Loop principal."""
-        if not self.initialize():
+        if not self.initialize(train_mode=train_mode):
             print("❌ Error de inicialización")
+            remove_pid()
             return
         
         self.running = True
@@ -363,19 +409,15 @@ class TradingBot:
                 # 0b. Verificar estado de posición abierta
                 position_status = self.check_position()
                 if position_status["has_position"]:
-                    # Ya hay posiciónabierta
                     print(f"⏸️ [{datetime.now().strftime('%H:%M:%S')}] "
                           f"Posiciónabierta: {position_status['type']} | "
-                          f"Profit: ${position_status['profit']:.2f} | "
-                          f"SL: {position_status['sl']} | TP: {position_status['tp']}")
+                          f"Profit: ${position_status['profit']:.2f}")
                     
-                    # Verificar si cerró por SL/TP
                     if position_status["closed"]:
                         print(f"✅ Posicióncerrada: {position_status['close_reason']}")
                         self.position_state = "IDLE"
                         self.last_order_time = time.time()
                     
-                    # Verificar profit objetivo
                     elif position_status["profit"] >= self.min_profit:
                         print(f"🎯 Profit objetivo alcanzado, cerrando...")
                         self.close_position(position_status["ticket"])
@@ -426,14 +468,12 @@ class TradingBot:
                     print(f"\n🚨 SEÑAL: {prediction}")
                     print(f"   Precio: ${market_data.get('price', 0):.2f}")
                     
-                    # Calcular SL/TP
                     sl_tp = self.calculate_sl_tp(
                         prediction,
                         market_data.get('price', 0),
                         market_data.get('atr', 0.5)
                     )
                     
-                    # Enviar orden
                     result = self.mt5.send_order(
                         symbol=Config.SYMBOL,
                         order_type=prediction,
@@ -455,7 +495,6 @@ class TradingBot:
                     else:
                         print(f"❌ Error: {result}")
                 
-                # Esperar
                 wait = 55 - datetime.now().second
                 if wait <= 0:
                     wait += 60
@@ -474,14 +513,19 @@ def main():
                         help="Ruta al modelo")
     parser.add_argument("--strategy", default="emas",
                         choices=["emas", "price_structure", "rsi_divergence"],
-                        help="Estrategia de labels: emas, price_structure, rsi_divergence")
+                        help="Estrategia de labels")
     parser.add_argument("--no-validate", action="store_true",
                         help="Saltar validación de config")
     
     args = parser.parse_args()
     
+    # Verificar si ya hay una instancia corriendo
+    if check_already_running():
+        sys.exit(1)
+    
     bot = TradingBot(model_path=args.model, label_strategy=args.strategy)
-    bot.run()
+    write_pid()
+    bot.run(train_mode=args.train)
 
 
 if __name__ == "__main__":
