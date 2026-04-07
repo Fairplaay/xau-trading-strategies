@@ -187,16 +187,15 @@ class LabelStrategyManager:
     
     def _create_labels_emas(self, rates):
         """
-        Estrategia EMAs (Triple Confirmación):
-        - BUY: precio > EMA200 + RSI 40-60 + (toca EMA50 O rompe máximo anterior)
-        - SELL: precio < EMA200 + RSI 40-60 + (toca EMA50 O rompe mínimo anterior)
+        Estrategia EMAs (Más estricto):
+        - BUY: precio > EMA200 + RSI 50-60 + toca EMA50 (pullback confirmado)
+        - SELL: precio < EMA200 + RSI 40-50 + toca EMA50
+        - Solo operar a favor de la tendencia principal
         """
         labels = ['NADA'] * 50
         
         for i in range(50, len(rates) - 1):
             closes = [r[4] for r in rates[:i+1]]
-            highs = [r[2] for r in rates[:i+1]]
-            lows = [r[3] for r in rates[:i+1]]
             current = closes[-1]
             
             # Calcular indicadores
@@ -204,28 +203,31 @@ class LabelStrategyManager:
             ema200 = self._ema(closes, 200)
             rsi = self._rsi(closes, 14)
             
-            # Análisis de tendencia
+            # Tendencia principal
             trend_up = current > ema200
             trend_down = current < ema200
             
-            # RSI en zona neutral (evitar extremos)
-            rsi_ok = 40 <= rsi <= 60
+            # RSI en zona más estricta
+            rsi_buy = 55 <= rsi <= 65  # Más estricto
+            rsi_sell = 35 <= rsi <= 45  # Más estricto
             
-            # Precio toca EMA50 (pullback) - usando ATR para scalping
+            # Precio toca EMA50 (pullback) - con ATR
             atr = self._atr(rates[:i+1], 14)
-            touch_ema50 = abs(current - ema50) < (atr * 0.5)
+            touch_ema50 = abs(current - ema50) < (atr * 0.3)  # Más estricto (era 0.5)
             
-            # Rompe máximo/mínimo anterior (últimas 10 velas)
-            recent_high = max(closes[-11:-1]) if len(closes) > 11 else max(closes[:-1])
-            recent_low = min(closes[-11:-1]) if len(closes) > 11 else min(closes[:-1])
-            break_high = current > recent_high
-            break_low = current < recent_low
-            
-            # Señales BUY: tendencia alcista + RSI neutral + (toca EMA50 O rompe máximo)
-            if trend_up and rsi_ok and (touch_ema50 or break_high):
+            # BUY: tendencia alcista + RSI estricto + toca EMA50
+            if trend_up and rsi_buy and touch_ema50:
                 labels.append('BUY')
-            # Señales SELL: tendencia bajista + RSI neutral + (toca EMA50 O rompe mínimo)
-            elif trend_down and rsi_ok and (touch_ema50 or break_low):
+            # SELL: tendencia bajista + RSI estricto + toca EMA50
+            elif trend_down and rsi_sell and touch_ema50:
+                labels.append('SELL')
+            else:
+                labels.append('NADA')
+        
+        while len(labels) < len(rates):
+            labels.append('NADA')
+        
+        return labels[:len(rates)]
                 labels.append('SELL')
             else:
                 labels.append('NADA')
