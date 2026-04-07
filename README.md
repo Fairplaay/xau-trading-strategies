@@ -12,10 +12,12 @@ pip install -r requirements.txt
 cp .env.example .env
 # Editar .env con tu configuración
 
-# 3. Entrenar modelo (necesita datos del EA)
+# 3. Ejecutar EA en MT5 (xau.mq5) - genera xau_data.json
+
+# 4. Entrenar modelo (necesita datos del EA)
 python bot.py --train
 
-# 4. Ejecutar bot
+# 5. Ejecutar bot
 python bot.py
 ```
 
@@ -24,6 +26,7 @@ python bot.py
 - Python 3.9+
 - MetaTrader 5 con el EA (xau.mq5) corriendo
 - **1000+ velas históricas** para entrenar el modelo
+- Vantage Demo (o outro broker)
 
 ## 🏗️ Arquitectura
 
@@ -32,7 +35,7 @@ python bot.py
 │                         EA MT5                               │
 │                   (xau.mq5 en MT5)                          │
 └──────────────────────┬──────────────────────────────────────┘
-                       ↓ xau_data.json
+                       ↓ xau_data.json (1000 velas)
 ┌─────────────────────────────────────────────────────────────┐
 │                        bot.py                               │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
@@ -50,6 +53,7 @@ xau-trading/
 ├── config.py          # Configuración
 ├── requirements.txt   # Dependencias
 ├── xau.mq5           # EA para MT5
+├── modelo_xau.pkl    # Modelo ML entrenado (se crea con --train)
 ├── ml/                # Módulo de Machine Learning
 │   ├── __init__.py
 │   ├── features.py    # Crear features desde datos
@@ -59,6 +63,22 @@ xau-trading/
 │   └── ea_connector.py
 └── news/              # Filtro de noticias
     └── calendar.py
+```
+
+## 📂 Archivos JSON
+
+### xau_data.json (EA → Python)
+Generado por el EA cada minuto:
+- `bid`, `ask` - precios actuales
+- `rsi14`, `ema50`, `ema200`, `atr14` - indicadores
+- `velas` - últimas 1000 velas OHLC
+
+### xau_commands.json (Python → EA)
+Comandos del bot al EA:
+```json
+{"action":"BUY","volume":0.01,"sl":3010.50,"tp":3020.00}
+{"action":"SELL","volume":0.01,"sl":3020.00,"tp":3010.00}
+{"action":"CLOSE","ticket":12345}
 ```
 
 ## 🔧 Configuración (.env)
@@ -99,6 +119,10 @@ El modelo aprende desde la lógica EMA/RSI:
 - **RandomForestClassifier** (100 árboles, max_depth=10)
 - sklearn
 
+### 4. Filtro de Noticias
+Bloquea operaciones durante noticias de alto impacto (±30 min):
+-信息来源: ForexFactory
+
 ## 📊 Uso
 
 ### Entrenar modelo
@@ -106,17 +130,26 @@ El modelo aprende desde la lógica EMA/RSI:
 python bot.py --train
 ```
 Necesita `xau_data.json` con 1000+ velas.
+Crea `modelo_xau.pkl`.
 
 ### Ejecutar bot
 ```bash
 python bot.py
 ```
+Usa el modelo `modelo_xau.pkl` existente.
 
 ### Opciones
 ```bash
 python bot.py --train              # Entrenar antes de ejecutar
 python bot.py --model mi_modelo.pkl  # Usar modelo específico
 ```
+
+## 🎯 Flujo completo
+
+1. **MT5**: Ejecutar EA (xau.mq5) → genera xau_data.json
+2. **Python**: Leer datos → calcular features → predecir con ML
+3. **Python**: Escribir comando en xau_commands.json
+4. **MT5**: EA ejecuta la orden en el broker
 
 ## ⚠️ Disclaimer
 
