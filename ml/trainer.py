@@ -3,9 +3,9 @@
 Trainer - Entrenar modelo ML para trading
 
 Usa scikit-learn RandomForestClassifier.
-Soporta múltiples estrategias de labels:
-- ema_rsi: Usa lógica EMA/RSI
-- price_structure: Usa lógica de price action (soporte/resistencia)
+Soporta múltiples estrategias de labels (ver ml/labels.py):
+- ema_rsi: Lógica EMA/RSI
+- price_structure: Price action
 
 参考: ctx7 docs /websites/scikit-learn_stable "RandomForestClassifier"
 """
@@ -22,6 +22,14 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import classification_report, accuracy_score
 
 from .features import Features
+from .labels import LabelStrategyManager
+
+
+# Estrategias de labels disponibles
+LABEL_STRATEGIES = {
+    'ema_rsi': 'EMA/RSI (precio vs EMA200 + RSI)',
+    'price_structure': 'Price Structure (soporte/resistencia)'
+}
 
 
 # Estrategias de labels disponibles
