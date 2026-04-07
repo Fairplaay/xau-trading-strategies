@@ -211,8 +211,9 @@ class LabelStrategyManager:
             # RSI en zona neutral (evitar extremos)
             rsi_ok = 40 <= rsi <= 60
             
-            # Precio toca EMA50 (pullback)
-            touch_ema50 = abs(current - ema50) < 0.5  # Within $0.50
+            # Precio toca EMA50 (pullback) - usando ATR para scalping
+            atr = self._atr(rates[:i+1], 14)
+            touch_ema50 = abs(current - ema50) < (atr * 0.5)
             
             # Rompe máximo/mínimo anterior (últimas 10 velas)
             recent_high = max(closes[-11:-1]) if len(closes) > 11 else max(closes[:-1])

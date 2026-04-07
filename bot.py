@@ -53,6 +53,17 @@ class TradingBot:
         self.predictor = None
         self.features_engine = None
         self.memory = None
+        
+        # Estado del bot
+        self.start_time = None
+        self.warmup = 60  # 1 minuto
+        self.position_state = "IDLE"  # IDLE = sin posición, OPEN = posición abierta
+        self.last_order_time = 0
+        self.cooldown = 300  # 5 minutos entre operaciones
+        self.daily_pnl = 0
+        self.max_daily_loss = 10.0  # $10 max por día
+        self.max_daily_profit = 15.0  # $15 objetivo
+        self.min_profit = 0.50  # $0.50 profit mínimo para cerrar
     
     def initialize(self, train_mode: bool = False) -> bool:
         """Inicializar componentes."""
@@ -242,6 +253,84 @@ class TradingBot:
         
         return sum(trs[-period:]) / period
     
+    def check_position(self) -> dict:
+        """Verificar si hay posición abierta en MT5."""
+        try:
+            # Intentar primero con MT5 directo
+            try:
+                import MetaTrader5 as mt5
+                mt5.initialize()
+                
+                positions = mt5.positions_get()
+                
+                if positions is None or len(positions) == 0:
+                    return {"has_position": False, "closed": False}
+                
+                for pos in positions:
+                    if pos.symbol == Config.SYMBOL:
+                        return {
+                            "has_position": True,
+                            "ticket": pos.ticket,
+                            "type": "BUY" if pos.type == 0 else "SELL",
+                            "open_price": pos.price_open,
+                            "profit": pos.profit,
+                            "sl": pos.sl,
+                            "tp": pos.tp,
+                            "closed": False,
+                            "close_reason": None
+                        }
+                
+                return {"has_position": False, "closed": False}
+                
+            except ImportError:
+                # Fallback: usar EA connector
+                positions = self.mt5.get_positions()
+                
+                if not positions or len(positions) == 0:
+                    return {"has_position": False, "closed": False}
+                
+                for pos in positions:
+                    if pos.get("symbol") == Config.SYMBOL:
+                        return {
+                            "has_position": True,
+                            "ticket": pos.get("ticket", 0),
+                            "type": pos.get("type", "SELL"),
+                            "open_price": pos.get("open_price", 0),
+                            "profit": pos.get("profit", 0),
+                            "sl": pos.get("sl", 0),
+                            "tp": pos.get("tp", 0),
+                            "closed": False,
+                            "close_reason": None
+                        }
+                
+                return {"has_position": False, "closed": False}
+            
+        except Exception as e:
+            print(f"⚠️ Error verificando posición: {e}")
+            return {"has_position": False, "closed": False}
+    
+    def close_position(self, ticket: int) -> bool:
+        """Cerrar posición por ticket."""
+        try:
+            # Intentar MT5 directo
+            try:
+                import MetaTrader5 as mt5
+                result = mt5.order_close(ticket)
+                if result:
+                    print(f"✅ Posición {ticket} cerrada")
+                    return True
+            except ImportError:
+                # Fallback: usar EA
+                result = self.mt5.close_position(ticket)
+                if result:
+                    print(f"✅ Posición {ticket} cerrada")
+                    return True
+            
+            return False
+        except Exception as e:
+            print(f"❌ Error cerrando posición: {e}")
+            return False
+    
     def check_news_block(self) -> dict:
         """Verificar bloqueo por noticias."""
         if not self.news or not self.news._loaded:
@@ -288,8 +377,50 @@ class TradingBot:
         
         signal.signal(signal.SIGINT, handle_interrupt)
         
+        # Iniciar timer para warmup
+        self.start_time = time.time()
+        
         while self.running:
             try:
+                # 0. Warmup: esperar 1 minuto antes de operar
+                if time.time() - self.start_time < self.warmup:
+                    wait_left = int(self.warmup - (time.time() - self.start_time))
+                    print(f"⏳ Warmup: {wait_left}s restantes...")
+                    time.sleep(10)
+                    continue
+                
+                # 0b. Verificar estado de posición abierta
+                position_status = self.check_position()
+                if position_status["has_position"]:
+                    # Ya hay posiciónabierta
+                    print(f"⏸️ [{datetime.now().strftime('%H:%M:%S')}] "
+                          f"Posiciónabierta: {position_status['type']} | "
+                          f"Profit: ${position_status['profit']:.2f} | "
+                          f"SL: {position_status['sl']} | TP: {position_status['tp']}")
+                    
+                    # Verificar si cerró por SL/TP
+                    if position_status["closed"]:
+                        print(f"✅ Posicióncerrada: {position_status['close_reason']}")
+                        self.position_state = "IDLE"
+                        self.last_order_time = time.time()
+                    
+                    # Verificar profit objetivo
+                    elif position_status["profit"] >= self.min_profit:
+                        print(f"🎯 Profit objetivo alcanzado, cerrando...")
+                        self.close_position(position_status["ticket"])
+                        self.position_state = "IDLE"
+                        self.last_order_time = time.time()
+                    
+                    time.sleep(55)
+                    continue
+                
+                # 0c. Verificar cooldown
+                if time.time() - self.last_order_time < self.cooldown:
+                    wait_left = int(self.cooldown - (time.time() - self.last_order_time))
+                    print(f"⏳ Cooldown: {wait_left}s restantes...")
+                    time.sleep(55)
+                    continue
+                
                 # 1. Verificar noticias
                 news_status = self.check_news_block()
                 if news_status["blocked"]:
