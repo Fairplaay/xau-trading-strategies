@@ -29,7 +29,8 @@ from .labels import LabelStrategyManager
 LABEL_STRATEGIES = {
     'emas': 'EMAs (Triple Confirmación) - EMA200 + RSI + EMA50/breaks',
     'price_structure': 'Price Structure (soporte/resistencia)',
-    'rsi_divergence': 'RSI Divergencia (precio nuevo minimo/maximo pero RSI opposite)'
+    'rsi_divergence': 'RSI Divergencia (precio nuevo minimo/maximo pero RSI opposite)',
+    'sin_reglas': 'Sin Reglas - Label basado en resultado futuro (price[i+5] vs ATR)'
 }
 
 
@@ -232,8 +233,42 @@ class Trainer:
             return self._create_labels_ema_rsi(rates)
         elif self.label_strategy == 'price_structure':
             return self._create_labels_price_structure(rates)
+        elif self.label_strategy == 'sin_reglas':
+            return self._create_labels_sin_reglas(rates)
         else:
             return ['NADA'] * len(rates)
+    
+    def _create_labels_sin_reglas(self, rates: List[List]) -> List[str]:
+        """
+        Labels basados en resultado futuro (sin_reglas):
+        - BUY: si price[i+5] >= price[i] + ATR*0.3
+        - SELL: si price[i+5] <= price[i] - ATR*0.3
+        - NADA: en cualquier otro caso
+        """
+        labels = ['NADA'] * 50
+        lookahead = 5
+        
+        for i in range(50, len(rates) - lookahead - 1):
+            closes = [r[4] for r in rates[:i+1]]
+            current = closes[-1]
+            
+            # Calcular ATR
+            atr = self._calculate_atr(rates[:i+1], 14)
+            threshold = atr * 0.3
+            
+            # Precio futuro
+            future_price = closes[lookahead]
+            
+            if future_price >= current + threshold:
+                labels.append('BUY')
+            elif future_price <= current - threshold:
+                labels.append('SELL')
+            else:
+                labels.append('NADA')
+        
+        while len(labels) < len(rates):
+            labels.append('NADA')
+        return labels[:len(rates)]
     
     def _create_labels_ema_rsi(self, rates: List[List]) -> List[str]:
         """

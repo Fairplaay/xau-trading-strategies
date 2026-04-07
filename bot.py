@@ -591,7 +591,7 @@ def main():
     parser.add_argument("--model", default="modelo_xau.pkl",
                         help="Ruta al modelo")
     parser.add_argument("--strategy", default="emas",
-                        choices=["emas", "price_structure", "rsi_divergence"],
+                        choices=["emas", "price_structure", "rsi_divergence", "sin_reglas"],
                         help="Estrategia de labels")
     parser.add_argument("--no-validate", action="store_true",
                         help="Saltar validación de config")
