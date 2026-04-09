@@ -1,0 +1,371 @@
+//@version=6
+// =============================================================================
+// 🏆 SUPER CONFLUENCE X v2 — Indicador Multi-Confluence con Porcentajes
+// =============================================================================
+// 11 Indicadores con toggle ON/OFF + tabla de confluencias + señal >75%
+// =============================================================================
+
+indicator("Super Confluence X v2", overlay=true, max_labels_count=50)
+
+// ==================== TOGGLES (ON/OFF) ====================
+
+grp_toggle = "📋 Indicadores Activos"
+useHULL = input.bool(true, "HULL", group=grp_toggle)
+useUT = input.bool(true, "UT Bot", group=grp_toggle)
+useRSI = input.bool(true, "RSI", group=grp_toggle)
+useMACD = input.bool(true, "MACD", group=grp_toggle)
+useADX = input.bool(true, "ADX", group=grp_toggle)
+useRSIDiv = input.bool(true, "RSI Divergencia", group=grp_toggle)
+useEMACross = input.bool(true, "EMA Cross", group=grp_toggle)
+useSTOCH = input.bool(true, "Estocástico", group=grp_toggle)
+useVWAP = input.bool(true, "VWAP", group=grp_toggle)
+useVOL = input.bool(true, "Volumen", group=grp_toggle)
+useBB = input.bool(true, "Bollinger", group=grp_toggle)
+
+// ==================== PARÁMETROS ====================
+
+grp_umbral = "⚙️ Configuración"
+umbral = input.float(75.0, "Umbral señal (%)", minval=50.0, maxval=100.0, group=grp_umbral)
+
+// HULL
+grp_hull = "1. HULL"
+hullLen = input.int(55, "Longitud", group=grp_hull)
+
+// UT
+grp_ut = "2. UT Bot"
+utSens = input.float(1.0, "Sensibilidad", group=grp_ut)
+utATR = input.int(10, "ATR Period", group=grp_ut)
+
+// RSI
+grp_rsi = "3. RSI"
+rsiLen = input.int(14, "Periodo", group=grp_rsi)
+rsiOS = input.float(30, "Nivel OS", group=grp_rsi)
+rsiOB = input.float(70, "Nivel OB", group=grp_rsi)
+
+// MACD
+grp_macd = "4. MACD"
+macdF = input.int(12, "Fast", group=grp_macd)
+macdS = input.int(26, "Slow", group=grp_macd)
+macdSig = input.int(9, "Signal", group=grp_macd)
+
+// ADX
+grp_adx = "5. ADX"
+adxLen = input.int(14, "Periodo", group=grp_adx)
+adxMin = input.float(20, "Mínimo", group=grp_adx)
+
+// RSI Divergencia
+grp_rsidiv = "6. RSI Div"
+divLookback = input.int(50, "Lookback", group=grp_rsidiv)
+
+// EMA Cross
+grp_ema = "7. EMA Cross"
+emaFast = input.int(9, "EMA Rápida", group=grp_ema)
+emaSlow = input.int(21, "EMA Lenta", group=grp_ema)
+
+// Estocástico
+grp_stoch = "8. Estocástico"
+stochK = input.int(14, "%K Period", group=grp_stoch)
+stochD = input.int(3, "%D Period", group=grp_stoch)
+stochSmooth = input.int(3, "Smooth", group=grp_stoch)
+stochOS = input.float(20, "Zona OS", group=grp_stoch)
+stochOB = input.float(80, "Zona OB", group=grp_stoch)
+
+// VWAP
+grp_vwap = "9. VWAP"
+vwapSrc = input.source(close, "Fuente", group=grp_vwap)
+
+// Volumen
+grp_vol = "10. Volumen"
+volPeriod = input.int(20, "SMA Period", group=grp_vol)
+
+// Bollinger
+grp_bb = "11. Bollinger"
+bbPeriod = input.int(20, "Periodo", group=grp_bb)
+bbStd = input.float(2.0, "StdDev", group=grp_bb)
+
+// ==================== CÁLCULOS ====================
+
+// 1. HULL
+f_hma(src, len) =>
+    sqrtLen = math.sqrt(len)
+    wma(2 * wma(src, math.floor(len / 2)) - wma(src, len), math.round(sqrtLen))
+
+HULL = f_hma(close, hullLen)
+HULL_FAST = f_hma(close[2], hullLen)
+hullUp = HULL > HULL_FAST
+hullDown = HULL < HULL_FAST
+
+// 2. UT Bot
+atrUT = ta.atr(utATR)
+nLoss = utSens * atrUT
+var float utStop = na
+utStop := nz(utStop[1], close)
+if close > nz(utStop[1]) and nz(close[1]) > nz(utStop[1])
+    utStop := math.max(nz(utStop[1]), close - nLoss)
+else if close < nz(utStop[1]) and nz(close[1]) < nz(utStop[1])
+    utStop := math.min(nz(utStop[1]), close + nLoss)
+else if close > nz(utStop[1])
+    utStop := close - nLoss
+else
+    utStop := close + nLoss
+
+utBuy = ta.crossover(close, utStop)
+utSell = ta.crossunder(close, utStop)
+
+// 3. RSI
+rsiVal = ta.rsi(close, rsiLen)
+rsiNeutral = rsiVal > rsiOS and rsiVal < rsiOB
+rsiOSZone = rsiVal < rsiOS
+rsiOBZone = rsiVal > rsiOB
+
+// 4. MACD
+[macdLine, macdSignal, macdHist] = ta.macd(close, macdF, macdS, macdSig)
+macdBullish = macdHist > 0 and macdHist > macdHist[1]
+macdBearish = macdHist < 0 and macdHist < macdHist[1]
+
+// 5. ADX
+[diPlus, diMinus, adxVal] = ta.dmi(adxLen, adxLen)
+adxStrong = adxVal > adxMin
+
+// 6. RSI Divergencia (simplificada)
+rsiLow = ta.lowest(rsiVal, divLookback)
+rsiHigh = ta.highest(rsiVal, divLookback)
+priceLow = ta.lowest(close, divLookback)
+priceHigh = ta.highest(close, divLookback)
+divAlcista = priceLow[divLookback] > close and rsiLow[divLookback] < rsiVal
+divBajista = priceHigh[divLookback] < close and rsiHigh[divLookback] > rsiVal
+
+// 7. EMA Cross
+ema9 = ta.ema(close, emaFast)
+ema21 = ta.ema(close, emaSlow)
+emaCrossUp = ta.crossover(ema9, ema21)
+emaCrossDown = ta.crossunder(ema9, ema21)
+
+// 8. Estocástico
+kVal = ta.stoch(close, high, low, stochK)
+dVal = ta.sma(kVal, stochD)
+stochBuy = ta.crossover(kVal, dVal) and kVal < stochOS
+stochSell = ta.crossunder(kVal, dVal) and kVal > stochOB
+
+// 9. VWAP (session-based)
+newSession = ta.change(time)
+cumSum = 0.0
+cumVol = 0.0
+cumSum := newSession ? vwapSrc * volume : cumSum[1] + vwapSrc * volume
+cumVol := newSession ? volume : cumVol[1] + volume
+vwapVal = cumVol > 0 ? cumSum / cumVol : na
+vwapAbove = close > vwapVal
+vwapBelow = close < vwapVal
+
+// 10. Volumen
+volSMA = ta.sma(volume, volPeriod)
+volHigh = volume > volSMA
+volLow = volume < volSMA
+
+// 11. Bollinger
+[bbMiddle, bbUpper, bbLower] = ta.bb(close, bbPeriod, bbStd)
+bbLowerZone = close <= bbLower * 1.01
+bbUpperZone = close >= bbUpper * 0.99
+bbMiddleZone = not bbLowerZone and not bbUpperZone
+
+// ==================== PORCENTAJES INDIVIDUALES ====================
+
+// 1. HULL %
+pctHULL = hullUp ? 100.0 : hullDown ? 0.0 : 50.0
+
+// 2. UT %
+pctUT = utBuy ? 100.0 : utSell ? 0.0 : 50.0
+
+// 3. RSI %
+pctRSI = rsiNeutral ? 100.0 : rsiOSZone or rsiOBZone ? 0.0 : 50.0
+
+// 4. MACD %
+pctMACD = macdBullish ? 100.0 : macdBearish ? 0.0 : 50.0
+
+// 5. ADX %
+pctADX = adxStrong and diPlus > diMinus ? 100.0 : adxStrong and diMinus > diPlus ? 0.0 : 50.0
+
+// 6. RSI Div %
+pctRSIDiv = divAlcista ? 100.0 : divBajista ? 0.0 : 50.0
+
+// 7. EMA Cross %
+pctEMA = emaCrossUp ? 100.0 : emaCrossDown ? 0.0 : 50.0
+
+// 8. Estocástico %
+pctSTOCH = stochBuy ? 100.0 : stochSell ? 0.0 : 50.0
+
+// 9. VWAP %
+pctVWAP = vwapAbove ? 100.0 : vwapBelow ? 0.0 : 50.0
+
+// 10. Volumen %
+pctVOL = volHigh ? 100.0 : volLow ? 0.0 : 50.0
+
+// 11. Bollinger %
+pctBB = bbLowerZone ? 100.0 : bbUpperZone ? 0.0 : 50.0
+
+// ==================== CÁLCULO TOTAL ====================
+
+// Contar indicadores activos
+activeCount = 0.0
+activeCount := activeCount + (useHULL ? 1 : 0)
+activeCount := activeCount + (useUT ? 1 : 0)
+activeCount := activeCount + (useRSI ? 1 : 0)
+activeCount := activeCount + (useMACD ? 1 : 0)
+activeCount := activeCount + (useADX ? 1 : 0)
+activeCount := activeCount + (useRSIDiv ? 1 : 0)
+activeCount := activeCount + (useEMACross ? 1 : 0)
+activeCount := activeCount + (useSTOCH ? 1 : 0)
+activeCount := activeCount + (useVWAP ? 1 : 0)
+activeCount := activeCount + (useVOL ? 1 : 0)
+activeCount := activeCount + (useBB ? 1 : 0)
+
+// Sumar porcentajes BUY (para BUY es el mismo cálculo)
+totalBuy = 0.0
+totalBuy := totalBuy + (useHULL ? pctHULL : 0)
+totalBuy := totalBuy + (useUT ? pctUT : 0)
+totalBuy := totalBuy + (useRSI ? pctRSI : 0)
+totalBuy := totalBuy + (useMACD ? pctMACD : 0)
+totalBuy := totalBuy + (useADX ? pctADX : 0)
+totalBuy := totalBuy + (useRSIDiv ? pctRSIDiv : 0)
+totalBuy := totalBuy + (useEMACross ? pctEMA : 0)
+totalBuy := totalBuy + (useSTOCH ? pctSTOCH : 0)
+totalBuy := totalBuy + (useVWAP ? pctVWAP : 0)
+totalBuy := totalBuy + (useVOL ? pctVOL : 0)
+totalBuy := totalBuy + (useBB ? pctBB : 0)
+
+// Calcular porcentaje total
+totalPct = activeCount > 0 ? totalBuy / activeCount : 0.0
+
+// Señal activa
+signalBuy = totalPct >= umbral
+
+// ==================== VISUALIZACIÓN ====================
+
+// Plot HULL
+plot(HULL, "HULL", color=hullUp ? color.lime : color.red, linewidth=2)
+
+// Plot UT Stop
+plot(utStop, "UT Stop", color=color.new(color.blue, 50), linewidth=1)
+
+// Plot VWAP
+plot(vwapVal, "VWAP", color=color.orange, linewidth=1)
+
+// Plot Bollinger
+plot(bbMiddle, "BB Middle", color=color.gray, linewidth=1)
+plot(bbUpper, "BB Upper", color=color.gray, linewidth=1)
+plot(bbLower, "BB Lower", color=color.gray, linewidth=1)
+
+//Señales en chart
+plotshape(signalBuy, "SEÑAL", text="📊 " + str.tostring(totalPct, "#.0") + "%", 
+     location=location.top, color=color.new(color.blue, 0), textcolor=color.white, 
+     size=size.normal, style=shape.labeldown)
+
+// ==================== TABLA DE CONFLUENCIAS ====================
+
+var table confTable = table.new(position.right, 3, 14, bgcolor=color.new(color.black, 80), border_width=1)
+
+if barstate.islast
+    // Header
+    confTable.cell(0, 0, "IND", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+    confTable.cell(1, 0, "ESTADO", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+    confTable.cell(2, 0, "%", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+    
+    // Fila 1: HULL
+    row = 1
+    confTable.cell(0, row, "HULL", text_color=color.orange, text_size=size.small)
+    confTable.cell(1, row, hullUp ? "▲ UP" : (hullDown ? "▼ DN" : "—"), 
+         text_color=hullUp ? color.lime : (hullDown ? color.red : color.gray), text_size=size.small)
+    confTable.cell(2, row, str.tostring(pctHULL, "#.0") + "%", 
+         text_color=pctHULL >= 50 ? color.lime : color.red, text_size=size.small)
+    
+    // Fila 2: UT
+    row := row + 1
+    confTable.cell(0, row, "UT", text_color=color.blue, text_size=size.small)
+    confTable.cell(1, row, utBuy ? "▲ BUY" : (utSell ? "▼ SELL" : "—"), 
+         text_color=utBuy ? color.lime : (utSell ? color.red : color.gray), text_size=size.small)
+    confTable.cell(2, row, str.tostring(pctUT, "#.0") + "%", 
+         text_color=pctUT >= 50 ? color.lime : color.red, text_size=size.small)
+    
+    // Fila 3: RSI
+    row := row + 1
+    confTable.cell(0, row, "RSI", text_color=color.purple, text_size=size.small)
+    confTable.cell(1, row, rsiOSZone ? "OS" : (rsiOBZone ? "OB" : "N"), 
+         text_color=rsiOSZone ? color.lime : (rsiOBZone ? color.red : color.gray), text_size=size.small)
+    confTable.cell(2, row, str.tostring(pctRSI, "#.0") + "%", 
+         text_color=pctRSI >= 50 ? color.lime : color.red, text_size=size.small)
+    
+    // Fila 4: MACD
+    row := row + 1
+    confTable.cell(0, row, "MACD", text_color=color.teal, text_size=size.small)
+    confTable.cell(1, row, macdBullish ? "▲" : (macdBearish ? "▼" : "—"), 
+         text_color=macdBullish ? color.lime : (macdBearish ? color.red : color.gray), text_size=size.small)
+    confTable.cell(2, row, str.tostring(pctMACD, "#.0") + "%", 
+         text_color=pctMACD >= 50 ? color.lime : color.red, text_size=size.small)
+    
+    // Fila 5: ADX
+    row := row + 1
+    confTable.cell(0, row, "ADX", text_color=color.yellow, text_size=size.small)
+    confTable.cell(1, row, adxStrong ? "STR" : "WEAK", 
+         text_color=adxStrong ? color.lime : color.gray, text_size=size.small)
+    confTable.cell(2, row, str.tostring(pctADX, "#.0") + "%", 
+         text_color=pctADX >= 50 ? color.lime : color.red, text_size=size.small)
+    
+    // Fila 6: RSI Div
+    row := row + 1
+    confTable.cell(0, row, "DIV", text_color=color.maroon, text_size=size.small)
+    confTable.cell(1, row, divAlcista ? "ALC" : (divBajista ? "BAJ" : "—"), 
+         text_color=divAlcista ? color.lime : (divBajista ? color.red : color.gray), text_size=size.small)
+    confTable.cell(2, row, str.tostring(pctRSIDiv, "#.0") + "%", 
+         text_color=pctRSIDiv >= 50 ? color.lime : color.red, text_size=size.small)
+    
+    // Fila 7: EMA
+    row := row + 1
+    confTable.cell(0, row, "EMA", text_color=color.olive, text_size=size.small)
+    confTable.cell(1, row, emaCrossUp ? "▲" : (emaCrossDown ? "▼" : "—"), 
+         text_color=emaCrossUp ? color.lime : (emaCrossDown ? color.red : color.gray), text_size=size.small)
+    confTable.cell(2, row, str.tostring(pctEMA, "#.0") + "%", 
+         text_color=pctEMA >= 50 ? color.lime : color.red, text_size=size.small)
+    
+    // Fila 8: STOCH
+    row := row + 1
+    confTable.cell(0, row, "STOCH", text_color=color.gray, text_size=size.small)
+    confTable.cell(1, row, stochBuy ? "BUY" : (stochSell ? "SELL" : "—"), 
+         text_color=stochBuy ? color.lime : (stochSell ? color.red : color.gray), text_size=size.small)
+    confTable.cell(2, row, str.tostring(pctSTOCH, "#.0") + "%", 
+         text_color=pctSTOCH >= 50 ? color.lime : color.red, text_size=size.small)
+    
+    // Fila 9: VWAP
+    row := row + 1
+    confTable.cell(0, row, "VWAP", text_color=color.orange, text_size=size.small)
+    confTable.cell(1, row, vwapAbove ? "▲" : (vwapBelow ? "▼" : "—"), 
+         text_color=vwapAbove ? color.lime : (vwapBelow ? color.red : color.gray), text_size=size.small)
+    confTable.cell(2, row, str.tostring(pctVWAP, "#.0") + "%", 
+         text_color=pctVWAP >= 50 ? color.lime : color.red, text_size=size.small)
+    
+    // Fila 10: VOL
+    row := row + 1
+    confTable.cell(0, row, "VOL", text_color=color.cyan, text_size=size.small)
+    confTable.cell(1, row, volHigh ? "HIGH" : (volLow ? "LOW" : "—"), 
+         text_color=volHigh ? color.lime : (volLow ? color.red : color.gray), text_size=size.small)
+    confTable.cell(2, row, str.tostring(pctVOL, "#.0") + "%", 
+         text_color=pctVOL >= 50 ? color.lime : color.red, text_size=size.small)
+    
+    // Fila 11: BB
+    row := row + 1
+    confTable.cell(0, row, "BB", text_color=color.silver, text_size=size.small)
+    confTable.cell(1, row, bbLowerZone ? "LOWER" : (bbUpperZone ? "UPPER" : "MID"), 
+         text_color=bbLowerZone ? color.lime : (bbUpperZone ? color.red : color.gray), text_size=size.small)
+    confTable.cell(2, row, str.tostring(pctBB, "#.0") + "%", 
+         text_color=pctBB >= 50 ? color.lime : color.red, text_size=size.small)
+    
+    // Fila 12: SEÑAL FINAL
+    row := row + 1
+    confTable.cell(0, row, "🔔 SEÑAL", bgcolor=color.new(color.blue, 30), text_color=color.white, text_size=size.small)
+    confTable.cell(1, row, signalBuy ? "✅ ACTIVA" : "⏳ ESPERAR", 
+         bgcolor=signalBuy ? color.lime : color.gray, text_color=color.black, text_size=size.small)
+    confTable.cell(2, row, str.tostring(totalPct, "#.0") + "%", 
+         bgcolor=signalBuy ? color.lime : color.gray, text_color=color.black, text_size=size.small)
+
+// ==================== ALERTAS ====================
+
+alertcondition(signalBuy, "Señal Activa", "Confluence: " + str.tostring(totalPct, "#.0") + "%")
