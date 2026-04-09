@@ -37,9 +37,9 @@ confluence_min = input.int(3, "Min Confluencias (1-5)")
 
 // ==================== HULL SUITE ====================
 
-// Función HMA
+// Función HMA correcta
 f_hma(src, len) =>
-    math.sqrt(len) * ta.wma(2 * ta.wma(src, len / 2) - ta.wma(src, len), math.round(math.sqrt(len)))
+    wma(2 * wma(src, len / 2) - wma(src, len), math.round(math.sqrt(len)))
 
 HULL = f_hma(close, hull_len)
 HULL_FAST = f_hma(close[2], hull_len)
@@ -56,17 +56,18 @@ plot(HULL, "Hull", color=hull_color, linewidth=2)
 atr = ta.atr(ut_atr_len)
 nLoss = ut_sens * atr
 
-var float ut_stop = 0.0
+// UT Bot ATR Trailing Stop - versión simplificada
+var float ut_stop = na
 ut_stop := na(ut_stop[1]) ? close :
-     close > ut_stop[1] and close[1] > ut_stop[1] ? math.max(ut_stop[1], close - nLoss) :
-     close < ut_stop[1] and close[1] < ut_stop[1] ? math.min(ut_stop[1], close + nLoss) :
-     close > ut_stop[1] ? close - nLoss :
+     close > nz(ut_stop[1], 0) and close[1] > nz(ut_stop[1], 0) ? math.max(nz(ut_stop[1], 0), close - nLoss) :
+     close < nz(ut_stop[1], 0) and close[1] < nz(ut_stop[1], 0) ? math.min(nz(ut_stop[1], 0), close + nLoss) :
+     close > nz(ut_stop[1], 0) ? close - nLoss :
      close + nLoss
 
 ut_buy = ta.crossover(close, ut_stop)
 ut_sell = ta.crossunder(close, ut_stop)
 
-plot(ut_stop, "UT Stop", color=color.new(color.blue, 0), linewidth=2)
+plot(ut_stop, "UT Stop", color=color.new(color.blue, 50), linewidth=2)
 
 // ==================== RSI ====================
 
@@ -113,11 +114,11 @@ sell_signal = sell_confluence >= confluence_min
 // ==================== PLOTS ====================
 
 // Señales
-plotshape(buy_signal, "BUY", text="🟢 BUY\n" + str.tostring(buy_confluence), 
+plotshape(buy_signal, "BUY", text="🟢 BUY " + str.tostring(buy_confluence), 
      location=location.belowbar, color=color.lime, textcolor=color.white, 
      size=size.tiny, style=shape.labelup)
 
-plotshape(sell_signal, "SELL", text="🔴 SELL\n" + str.tostring(sell_confluence), 
+plotshape(sell_signal, "SELL", text="🔴 SELL " + str.tostring(sell_confluence), 
      location=location.abovebar, color=color.red, textcolor=color.white, 
      size=size.tiny, style=shape.labeldown)
 
@@ -128,51 +129,44 @@ bgcolor(sell_signal ? color.new(color.red, 90) : na)
 // ==================== ALERTAS ====================
 
 alertcondition(buy_signal, "🟢 BUY Alert", 
-     "SUPER BUY: Hull={{hull_trend_up}} UT={{ut_buy}} RSI={{rsi}} MACD={{macd_bullish}} ADX={{adx}} Confluence={{buy_confluence}}/5")
+     "SUPER BUY: Confluence=" + str.tostring(buy_confluence) + "/5")
 
 alertcondition(sell_signal, "🔴 SELL Alert", 
-     "SUPER SELL: Hull={{hull_trend_down}} UT={{ut_sell}} RSI={{rsi}} MACD={{macd_bearish}} ADX={{adx}} Confluence={{sell_confluence}}/5")
+     "SUPER SELL: Confluence=" + str.tostring(sell_confluence) + "/5")
 
 // ==================== PANEL DE INFO ====================
 
 var table panel = table.new(position.bottom_right, 3, 7, bgcolor=color.new(color.black, 80), border_width=1)
 
 if barstate.islast
-    // Header
     panel.cell(0, 0, "INDICADOR", bgcolor=color.gray, text_color=color.white)
     panel.cell(0, 1, "VALOR", bgcolor=color.gray, text_color=color.white)
     panel.cell(0, 2, "STATUS", bgcolor=color.gray, text_color=color.white)
     
-    // Hull
     panel.cell(1, 0, "HULL", text_color=color.orange)
     panel.cell(1, 1, str.tostring(HULL, "#.##"), text_color=color.white)
     panel.cell(1, 2, hull_trend_up ? "🟢 UP" : "🔴 DOWN", text_color=hull_trend_up ? color.lime : color.red)
     
-    // UT
     panel.cell(2, 0, "UT STOP", text_color=color.blue)
     panel.cell(2, 1, str.tostring(ut_stop, "#.##"), text_color=color.white)
-    panel.cell(2, 2, ut_buy ? "🟢 CROSS UP" : ut_sell ? "🔴 CROSS DOWN" : "➖", text_color=ut_buy ? color.lime : (ut_sell ? color.red : color.gray))
+    panel.cell(2, 2, ut_buy ? "🟢 UP" : ut_sell ? "🔴 DOWN" : "➖", text_color=ut_buy ? color.lime : (ut_sell ? color.red : color.gray))
     
-    // RSI
     panel.cell(3, 0, "RSI", text_color=color.purple)
     panel.cell(3, 1, str.tostring(rsi, "#.##"), text_color=color.white)
     panel.cell(3, 2, rsi_oversold ? "🔥 OS" : rsi_overbought ? "🔥 OB" : "➖", 
          text_color=rsi_oversold ? color.lime : (rsi_overbought ? color.red : color.white))
     
-    // MACD
-    panel.cell(4, 0, "MACD Hist", text_color=color.teal)
+    panel.cell(4, 0, "MACD", text_color=color.teal)
     panel.cell(4, 1, str.tostring(hist, "#.####"), text_color=color.white)
-    panel.cell(4, 2, macd_bullish ? "🟢 BULL" : "🔴 BEAR", text_color=macd_bullish ? color.lime : color.red)
+    panel.cell(4, 2, macd_bullish ? "🟢" : "🔴", text_color=macd_bullish ? color.lime : color.red)
     
-    // ADX
     panel.cell(5, 0, "ADX", text_color=color.yellow)
     panel.cell(5, 1, str.tostring(adx, "#.##"), text_color=color.white)
-    panel.cell(5, 2, adx_strong ? "💪 FUERTE" : "💤", text_color=adx_strong ? color.lime : color.gray)
+    panel.cell(5, 2, adx_strong ? "💪" : "💤", text_color=adx_strong ? color.lime : color.gray)
     
-    // Confluence
     conf = buy_signal ? buy_confluence : (sell_signal ? sell_confluence : 0)
-    panel.cell(6, 0, "CONFLUENCE", bgcolor=color.new(color.blue, 30), text_color=color.white)
+    panel.cell(6, 0, "CONF", bgcolor=color.new(color.blue, 30), text_color=color.white)
     panel.cell(6, 1, str.tostring(conf) + "/5", bgcolor=color.new(color.blue, 30), text_color=color.white)
-    panel.cell(6, 2, buy_signal ? "🟢 BUY" : sell_signal ? "🔴 SELL" : "⏸️ ESPERAR", 
+    panel.cell(6, 2, buy_signal ? "🟢 BUY" : sell_signal ? "🔴 SELL" : "⏸️", 
          bgcolor=buy_signal ? color.lime : (sell_signal ? color.red : color.gray), 
          text_color=color.black)
