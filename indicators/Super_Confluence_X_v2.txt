@@ -239,6 +239,20 @@ totalPct = activeCount > 0 ? totalBuy / activeCount : 0.0
 // Señal activa
 signalBuy = totalPct >= umbral
 
+// ==================== SEÑALES VISUALES (SIN REPINTADO) ====================
+// Usar barstate.isconfirmed para evitar repintado
+signalConfirmed = barstate.isconfirmed and (totalPct >= umbral)
+
+// Flecha BUY en el gráfico
+plotshape(signalConfirmed and not signalConfirmed[1], "SEÑAL BUY", 
+     title="Signal Arrow",
+     text="🟢 " + str.tostring(totalPct, "#.0") + "%", 
+     location=location.belowbar, 
+     color=color.lime, 
+     textcolor=color.black, 
+     size=size.normal, 
+     style=shape.labelup)
+
 // ==================== VISUALIZACIÓN ====================
 
 // Plot HULL
@@ -255,10 +269,7 @@ plot(bbMiddle, "BB Middle", color=color.gray, linewidth=1)
 plot(bbUpper, "BB Upper", color=color.gray, linewidth=1)
 plot(bbLower, "BB Lower", color=color.gray, linewidth=1)
 
-//Señales en chart
-plotshape(signalBuy, "SEÑAL", text="📊 " + str.tostring(totalPct, "#.0") + "%", 
-     location=location.top, color=color.new(color.blue, 0), textcolor=color.white, 
-     size=size.normal, style=shape.labeldown)
+//Señales en chart (solo para debugging, removido para evitar duplicado)
 
 // ==================== TABLA DE CONFLUENCIAS ====================
 
@@ -368,4 +379,4 @@ if barstate.islast
 
 // ==================== ALERTAS ====================
 
-alertcondition(signalBuy, "Señal Activa", "Confluence: " + str.tostring(totalPct, "#.0") + "%")
+alertcondition(signalConfirmed and not signalConfirmed[1], "Señal Activa (sin repintar)", "Confluence: " + str.tostring(totalPct, "#.0") + "%")
