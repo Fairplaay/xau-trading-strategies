@@ -1,0 +1,262 @@
+//@version=6
+// =============================================================================
+// 🏆 SUPER CONFLUENCE X v3 — Sistema de Confluencias con Dirección
+// =============================================================================
+// 6 Indicadores core + cálculo BUY vs SELL separado + señal con dirección
+// =============================================================================
+
+indicator("Super Confluence X v3", overlay=true, max_labels_count=50)
+
+// ==================== TOGGLES ====================
+
+grp_toggle = "📋 Indicadores Activos (6)"
+useHULL = input.bool(true, "HULL", group=grp_toggle)
+useUT = input.bool(true, "UT Bot", group=grp_toggle)
+useRSI = input.bool(true, "RSI", group=grp_toggle)
+useMACD = input.bool(true, "MACD", group=grp_toggle)
+useADX = input.bool(true, "ADX", group=grp_toggle)
+useEMA = input.bool(true, "EMA Cross", group=grp_toggle)
+
+// ==================== PARÁMETROS ====================
+
+grp_cfg = "⚙️ Configuración"
+umbral = input.float(75.0, "Umbral señal (%)", minval=50.0, maxval=100.0, group=grp_cfg)
+
+// HULL
+grp_hull = "1. HULL"
+hullLen = input.int(55, "Longitud", group=grp_hull)
+
+// UT
+grp_ut = "2. UT Bot"
+utSens = input.float(1.0, "Sensibilidad", group=grp_ut)
+utATR = input.int(10, "ATR Period", group=grp_ut)
+
+// RSI
+grp_rsi = "3. RSI"
+rsiLen = input.int(14, "Periodo", group=grp_rsi)
+rsiOS = input.float(35, "Nivel OS", group=grp_rsi)
+rsiOB = input.float(65, "Nivel OB", group=grp_rsi)
+
+// MACD
+grp_macd = "4. MACD"
+macdF = input.int(12, "Fast", group=grp_macd)
+macdS = input.int(26, "Slow", group=grp_macd)
+macdSig = input.int(9, "Signal", group=grp_macd)
+
+// ADX
+grp_adx = "5. ADX"
+adxLen = input.int(14, "Periodo", group=grp_adx)
+adxMin = input.float(20, "Mínimo", group=grp_adx)
+
+// EMA
+grp_ema = "6. EMA Cross"
+emaFast = input.int(9, "Rápida", group=grp_ema)
+emaSlow = input.int(21, "Lenta", group=grp_ema)
+
+// ==================== CÁLCULOS ====================
+
+// 1. HULL
+f_hma(src, len) =>
+    sqrtLen = math.sqrt(len)
+    wma(2 * wma(src, math.floor(len / 2)) - wma(src, len), math.round(sqrtLen))
+
+HULL = f_hma(close, hullLen)
+HULL_FAST = f_hma(close[2], hullLen)
+
+// 2. UT Bot
+atrUT = ta.atr(utATR)
+nLoss = utSens * atrUT
+var float utStop = na
+utStop := nz(utStop[1], close)
+if close > nz(utStop[1]) and nz(close[1]) > nz(utStop[1])
+    utStop := math.max(nz(utStop[1]), close - nLoss)
+else if close < nz(utStop[1]) and nz(close[1]) < nz(utStop[1])
+    utStop := math.min(nz(utStop[1]), close + nLoss)
+else if close > nz(utStop[1])
+    utStop := close - nLoss
+else
+    utStop := close + nLoss
+
+utCrossUp = ta.crossover(close, utStop)
+utCrossDown = ta.crossunder(close, utStop)
+
+// 3. RSI
+rsiVal = ta.rsi(close, rsiLen)
+
+// 4. MACD
+[macdLine, macdSignal, macdHist] = ta.macd(close, macdF, macdS, macdSig)
+
+// 5. ADX
+[diPlus, diMinus, adxVal] = ta.dmi(adxLen, adxLen)
+
+// 6. EMA
+ema9 = ta.ema(close, emaFast)
+ema21 = ta.ema(close, emaSlow)
+emaCrossUp = ta.crossover(ema9, ema21)
+emaCrossDown = ta.crossunder(ema9, ema21)
+
+// ==================== CÁLCULO DE PORCENTAJES (FÓRMULA) ====================
+
+// Función para calcular % basado en condiciones
+calcPct(condFavorable, condDesfavorable) =>
+    condFavorable ? 100.0 : condDesfavorable ? 0.0 : 50.0
+
+// --- HULL ---
+// BUY: HULL Subiendo | SELL: HULL Bajando
+hullPctBuy = calcPct(HULL > HULL_FAST, HULL < HULL_FAST)
+hullPctSell = calcPct(HULL < HULL_FAST, HULL > HULL_FAST)
+
+// --- UT ---
+// BUY: Cross Up | SELL: Cross Down
+utPctBuy = calcPct(utCrossUp, utCrossDown)
+utPctSell = calcPct(utCrossDown, utCrossUp)
+
+// --- RSI ---
+// BUY: No sobrecompra (RSI < OB) | SELL: No sobreventa (RSI > OS)
+rsiPctBuy = calcPct(rsiVal < rsiOB, rsiVal > rsiOB)
+rsiPctSell = calcPct(rsiVal > rsiOS, rsiVal < rsiOS)
+
+// --- MACD ---
+// BUY: Hist positivo Y subiendo | SELL: Hist negativo Y bajando
+macdPctBuy = calcPct(macdHist > 0 and macdHist > macdHist[1], macdHist < 0 and macdHist < macdHist[1])
+macdPctSell = calcPct(macdHist < 0 and macdHist < macdHist[1], macdHist > 0 and macdHist > macdHist[1])
+
+// --- ADX ---
+// BUY: ADX fuerte + DI+ > DI- | SELL: ADX fuerte + DI- > DI+
+adxPctBuy = calcPct(adxVal > adxMin and diPlus > diMinus, adxVal > adxMin and diMinus > diPlus)
+adxPctSell = calcPct(adxVal > adxMin and diMinus > diPlus, adxVal > adxMin and diPlus > diMinus)
+
+// --- EMA ---
+// BUY: Cross Up | SELL: Cross Down
+emaPctBuy = calcPct(emaCrossUp, emaCrossDown)
+emaPctSell = calcPct(emaCrossDown, emaCrossUp)
+
+// ==================== TOTALES ====================
+
+// Contar activos
+activeCount = 0.0
+activeCount := activeCount + (useHULL ? 1 : 0)
+activeCount := activeCount + (useUT ? 1 : 0)
+activeCount := activeCount + (useRSI ? 1 : 0)
+activeCount := activeCount + (useMACD ? 1 : 0)
+activeCount := activeCount + (useADX ? 1 : 0)
+activeCount := activeCount + (useEMA ? 1 : 0)
+
+// Total BUY
+totalBuy = 0.0
+totalBuy := totalBuy + (useHULL ? hullPctBuy : 0)
+totalBuy := totalBuy + (useUT ? utPctBuy : 0)
+totalBuy := totalBuy + (useRSI ? rsiPctBuy : 0)
+totalBuy := totalBuy + (useMACD ? macdPctBuy : 0)
+totalBuy := totalBuy + (useADX ? adxPctBuy : 0)
+totalBuy := totalBuy + (useEMA ? emaPctBuy : 0)
+
+// Total SELL
+totalSell = 0.0
+totalSell := totalSell + (useHULL ? hullPctSell : 0)
+totalSell := totalSell + (useUT ? utPctSell : 0)
+totalSell := totalSell + (useRSI ? rsiPctSell : 0)
+totalSell := totalSell + (useMACD ? macdPctSell : 0)
+totalSell := totalSell + (useADX ? adxPctSell : 0)
+totalSell := totalSell + (useEMA ? emaPctSell : 0)
+
+// Porcentajes finales
+totalBuyPct = activeCount > 0 ? totalBuy / activeCount : 0.0
+totalSellPct = activeCount > 0 ? totalSell / activeCount : 0.0
+
+// Determinar señal
+signalBuy = totalBuyPct >= umbral and totalBuyPct > totalSellPct
+signalSell = totalSellPct >= umbral and totalSellPct > totalBuyPct
+signalActive = signalBuy or signalSell
+
+// ==================== SEÑAL EN CHART (SIN REPINTADO) ====================
+
+signalNow = signalActive and barstate.isconfirmed
+signalWas = signalActive[1] and barstate.isconfirmed[1]
+
+plotshape(signalNow and not signalWas and signalBuy, "BUY Signal", 
+     text="🟢 BUY\n" + str.tostring(totalBuyPct, "#.0") + "%", 
+     location=location.belowbar, color=color.lime, textcolor=color.black, 
+     size=size.normal, style=shape.labelup)
+
+plotshape(signalNow and not signalWas and signalSell, "SELL Signal", 
+     text="🔴 SELL\n" + str.tostring(totalSellPct, "#.0") + "%", 
+     location=location.abovebar, color=color.red, textcolor=color.white, 
+     size=size.normal, style=shape.labeldown)
+
+// ==================== PLOTS AUXILIARES ====================
+
+plot(HULL, "HULL", color=color.orange, linewidth=2)
+plot(utStop, "UT Stop", color=color.new(color.blue, 50), linewidth=1)
+
+// ==================== TABLA DE CONFLUENCIAS ====================
+
+var table confTable = table.new(position.right, 4, 9, bgcolor=color.new(color.black, 80), border_width=1)
+
+if barstate.islast
+    // Header
+    confTable.cell(0, 0, "IND", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+    confTable.cell(1, 0, "BUY%", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+    confTable.cell(2, 0, "SELL%", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+    confTable.cell(3, 0, "ESTADO", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+    
+    // HULL
+    confTable.cell(0, 1, "HULL", text_color=color.orange, text_size=size.small)
+    confTable.cell(1, 1, str.tostring(hullPctBuy, "#.0") + "%", text_color=color.white, text_size=size.small)
+    confTable.cell(2, 1, str.tostring(hullPctSell, "#.0") + "%", text_color=color.white, text_size=size.small)
+    confTable.cell(3, 1, HULL > HULL_FAST ? "▲" : (HULL < HULL_FAST ? "▼" : "—"), 
+         text_color=HULL > HULL_FAST ? color.lime : (HULL < HULL_FAST ? color.red : color.gray), text_size=size.small)
+    
+    // UT
+    confTable.cell(0, 2, "UT", text_color=color.blue, text_size=size.small)
+    confTable.cell(1, 2, str.tostring(utPctBuy, "#.0") + "%", text_color=color.white, text_size=size.small)
+    confTable.cell(2, 2, str.tostring(utPctSell, "#.0") + "%", text_color=color.white, text_size=size.small)
+    confTable.cell(3, 2, utCrossUp ? "🟢" : (utCrossDown ? "🔴" : "—"), 
+         text_color=utCrossUp ? color.lime : (utCrossDown ? color.red : color.gray), text_size=size.small)
+    
+    // RSI
+    confTable.cell(0, 3, "RSI", text_color=color.purple, text_size=size.small)
+    confTable.cell(1, 3, str.tostring(rsiPctBuy, "#.0") + "%", text_color=color.white, text_size=size.small)
+    confTable.cell(2, 3, str.tostring(rsiPctSell, "#.0") + "%", text_color=color.white, text_size=size.small)
+    rsiStatus = rsiVal < rsiOS ? "OS" : (rsiVal > rsiOB ? "OB" : "N")
+    confTable.cell(3, 3, rsiStatus, text_color=rsiVal < rsiOS ? color.lime : (rsiVal > rsiOB ? color.red : color.gray), text_size=size.small)
+    
+    // MACD
+    confTable.cell(0, 4, "MACD", text_color=color.teal, text_size=size.small)
+    confTable.cell(1, 4, str.tostring(macdPctBuy, "#.0") + "%", text_color=color.white, text_size=size.small)
+    confTable.cell(2, 4, str.tostring(macdPctSell, "#.0") + "%", text_color=color.white, text_size=size.small)
+    macdStatus = macdHist > 0 ? "▲" : (macdHist < 0 ? "▼" : "—")
+    confTable.cell(3, 4, macdStatus, text_color=macdHist > 0 ? color.lime : (macdHist < 0 ? color.red : color.gray), text_size=size.small)
+    
+    // ADX
+    confTable.cell(0, 5, "ADX", text_color=color.yellow, text_size=size.small)
+    confTable.cell(1, 5, str.tostring(adxPctBuy, "#.0") + "%", text_color=color.white, text_size=size.small)
+    confTable.cell(2, 5, str.tostring(adxPctSell, "#.0") + "%", text_color=color.white, text_size=size.small)
+    adxStatus = adxVal > adxMin ? (diPlus > diMinus ? "UP" : "DN") : "WEAK"
+    confTable.cell(3, 5, adxStatus, text_color=adxVal > adxMin ? color.lime : color.gray, text_size=size.small)
+    
+    // EMA
+    confTable.cell(0, 6, "EMA", text_color=color.olive, text_size=size.small)
+    confTable.cell(1, 6, str.tostring(emaPctBuy, "#.0") + "%", text_color=color.white, text_size=size.small)
+    confTable.cell(2, 6, str.tostring(emaPctSell, "#.0") + "%", text_color=color.white, text_size=size.small)
+    emaStatus = emaCrossUp ? "🟢" : (emaCrossDown ? "🔴" : "—")
+    confTable.cell(3, 6, emaStatus, text_color=emaCrossUp ? color.lime : (emaCrossDown ? color.red : color.gray), text_size=size.small)
+    
+    // SEÑAL FINAL
+    confTable.cell(0, 7, "🔔 SEÑAL", bgcolor=color.new(color.blue, 30), text_color=color.white, text_size=size.small)
+    confTable.cell(1, 7, str.tostring(totalBuyPct, "#.0") + "%", 
+         bgcolor=signalBuy ? color.lime : color.gray, text_color=color.black, text_size=size.small)
+    confTable.cell(2, 7, str.tostring(totalSellPct, "#.0") + "%", 
+         bgcolor=signalSell ? color.red : color.gray, text_color=color.white, text_size=size.small)
+    signalText = signalBuy ? "🟢 BUY" : (signalSell ? "🔴 SELL" : "⏳ ESPERAR")
+    confTable.cell(3, 7, signalText, 
+         bgcolor=signalBuy ? color.lime : (signalSell ? color.red : color.gray), 
+         text_color=signalBuy ? color.black : color.white, text_size=size.small)
+
+// ==================== ALERTAS ====================
+
+alertcondition(signalNow and not signalWas and signalBuy, "🟢 BUY Signal", 
+     "BUY: " + str.tostring(totalBuyPct, "#.0") + "%")
+
+alertcondition(signalNow and not signalWas and signalSell, "🔴 SELL Signal", 
+     "SELL: " + str.tostring(totalSellPct, "#.0") + "%")
