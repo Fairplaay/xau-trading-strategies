@@ -1,0 +1,46 @@
+//@version=6
+indicator(title="HULL + TEMA", overlay=true)
+
+// ======= Hull Suite Section =======
+src_hull = input.source(close, title="Source")
+modeSwitch = input.string("Hma", title="Hull Variation", options=["Hma", "Thma", "Ehma"])
+length = input.int(55, title="Length")
+
+useHtf = input.bool(false, title="Show Hull MA from X timeframe?")
+htf = input.timeframe("240", title="Higher timeframe")
+
+switchColor = input.bool(true, title="Color Hull according to trend?")
+visualSwitch  = input.bool(true, title="Show as a Band?")
+thicknesSwitch = input.int(1, title="Line Thickness")
+transpSwitch = input.int(40, title="Band Transparency", step=5)
+
+// FUNCTIONS
+HMA(_src, _length) =>  ta.wma(2 * ta.wma(_src, _length / 2) - ta.wma(_src, _length), math.round(math.sqrt(_length)))
+EHMA(_src, _length) =>  ta.ema(2 * ta.ema(_src, _length / 2) - ta.ema(_src, _length), math.round(math.sqrt(_length)))
+THMA(_src, _length) =>  ta.wma(ta.wma(_src,_length / 3) * 3 - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+
+Mode(modeSwitch, src, len) =>
+      modeSwitch == "Hma"  ? HMA(src, len) :
+      modeSwitch == "Ehma" ? EHMA(src, len) : 
+      modeSwitch == "Thma" ? THMA(src, len/2) : na
+
+_hull = Mode(modeSwitch, src_hull, length)
+HULL = useHtf ? request.security(syminfo.tickerid, htf, _hull) : _hull
+MHULL = HULL[0]
+SHULL = HULL[2]
+
+hullColor = switchColor ? (HULL > HULL[2] ? #00ff00 : #ff0000) : #ff9800
+
+Fi1 = plot(MHULL, title="MHULL", color=hullColor, linewidth=thicknesSwitch)
+Fi2 = plot(visualSwitch ? SHULL : na, title="SHULL", color=hullColor, linewidth=thicknesSwitch)
+fill(Fi1, Fi2, title="Band Filler", color=color.new(hullColor, transpSwitch))
+
+// ======= TEMA Section =======
+temaLength = input.int(55, title="TEMA Length")
+
+ema1 = ta.ema(close, temaLength)
+ema2 = ta.ema(ema1, temaLength)
+ema3 = ta.ema(ema2, temaLength)
+tema = 3 * (ema1 - ema2) + ema3
+
+plot(tema, title="TEMA", color=color.aqua, linewidth=2)
