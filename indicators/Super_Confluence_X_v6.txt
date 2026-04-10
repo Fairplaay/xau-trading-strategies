@@ -10,61 +10,41 @@ indicator("Super Confluence X", overlay=true, max_labels_count=20)
 
 // ==================== INPUTS ====================
 
-// Hull Suite
 hull_len = input.int(55, "Hull Length")
 hull_color_on = input.bool(true, "Colorear según trend")
-
-// UT Bot
 ut_sens = input.float(1.0, "UT Sensitivity")
 ut_atr_len = input.int(10, "UT ATR Period")
-
-// RSI
 rsi_len = input.int(14, "RSI Period")
 rsi_buy = input.float(40, "RSI Buy Level")
 rsi_sell = input.float(60, "RSI Sell Level")
-
-// MACD
 macd_fast = input.int(12, "MACD Fast")
 macd_slow = input.int(26, "MACD Slow")
 macd_sig = input.int(9, "MACD Signal")
-
-// ADX
 adx_len = input.int(14, "ADX Period")
 adx_smooth = input.int(14, "ADX Smooth")
 adx_min = input.float(20, "ADX Min")
-
-// Señales
 confluence_min = input.int(3, "Min Confluencias (1-5)")
 
-// ==================== WMA (Weighted Moving Average) ====================
-// WMA manual ya que no existe en Pine Script nativamente
+// ==================== WMA ====================
 wma(src, len) => math.sum(src * len, len) / math.sum(len, len)
 
 // ==================== HULL SUITE ====================
-
-// Función HMA usando wma manual
 hull(src, len) =>
     sqrtLen = math.sqrt(len)
     wma(2 * wma(src, math.floor(len / 2)) - wma(src, len), math.round(sqrtLen))
 
 HULL = hull(close, hull_len)
 HULL_FAST = hull(close[2], hull_len)
-
 hull_trend_up = HULL > HULL_FAST
 hull_trend_down = HULL < HULL_FAST
-
 hull_color = hull_color_on ? (hull_trend_up ? color.green : color.red) : color.orange
 plot(HULL, "Hull", color=hull_color, linewidth=2)
 
 // ==================== UT BOT ====================
-
 atr_val = ta.atr(ut_atr_len)
 nLoss = ut_sens * atr_val
-
-// ATR Trailing Stop
 var float ut_stop = na
 ut_stop := nz(ut_stop[1], close)
-
 if close > ut_stop[1] and nz(close[1]) > nz(ut_stop[1])
     ut_stop := math.max(nz(ut_stop[1]), close - nLoss)
 else if close < nz(ut_stop[1]) and nz(close[1]) < nz(ut_stop[1])
@@ -76,116 +56,73 @@ else
 
 ut_buy = ta.crossover(close, ut_stop)
 ut_sell = ta.crossunder(close, ut_stop)
-
 plot(ut_stop, "UT Stop", color=color.new(color.blue, 50), linewidth=2)
 
 // ==================== RSI ====================
-
 rsi = ta.rsi(close, rsi_len)
-
 rsi_oversold = rsi < rsi_buy
 rsi_overbought = rsi > rsi_sell
 
 // ==================== MACD ====================
-
 [macd_line, macd_signal_line, macd_hist] = ta.macd(close, macd_fast, macd_slow, macd_sig)
-
 macd_bullish = macd_hist > 0 and macd_hist > macd_hist[1]
 macd_bearish = macd_hist < 0 and macd_hist < macd_hist[1]
 
 // ==================== ADX ====================
-
 [di_plus, di_minus, adx_val] = ta.dmi(adx_len, adx_smooth)
-
 adx_strong = adx_val > adx_min
 trend_up = di_plus > di_minus
 trend_down = di_minus > di_plus
 
 // ==================== SEÑALES ====================
-
-// BUY: 5 confluencias posibles
 c1_buy = hull_trend_up ? 1 : 0
 c2_buy = ut_buy ? 1 : 0
 c3_buy = rsi < rsi_sell ? 1 : 0
 c4_buy = macd_bullish ? 1 : 0
 c5_buy = adx_strong and trend_up ? 1 : 0
-
 buy_confluence = c1_buy + c2_buy + c3_buy + c4_buy + c5_buy
 buy_signal = buy_confluence >= confluence_min
 
-// SELL
 c1_sell = hull_trend_down ? 1 : 0
 c2_sell = ut_sell ? 1 : 0
 c3_sell = rsi > rsi_buy ? 1 : 0
 c4_sell = macd_bearish ? 1 : 0
 c5_sell = adx_strong and trend_down ? 1 : 0
-
 sell_confluence = c1_sell + c2_sell + c3_sell + c4_sell + c5_sell
 sell_signal = sell_confluence >= confluence_min
 
 // ==================== PLOTS ====================
-
-// Señales visuales
 plotshape(buy_signal, title="Buy Signal", location=location.belowbar, color=color.lime, textcolor=color.white, size=size.tiny, style=shape.labelup)
-
 plotshape(sell_signal, title="Sell Signal", location=location.abovebar, color=color.red, textcolor=color.white, size=size.tiny, style=shape.labeldown)
-
-// Background
-bgcolor(buy_signal ? color.new(color.lime, 90) : na, title="Buy BG")
-bgcolor(sell_signal ? color.new(color.red, 90) : na, title="Sell BG")
+bgcolor(buy_signal ? color.new(color.lime, 90) : na)
+bgcolor(sell_signal ? color.new(color.red, 90) : na)
 
 // ==================== ALERTAS ====================
-
-alertcondition(buy_signal, "Buy Alert", 
-     "BUY Signal")
-
-alertcondition(sell_signal, "Sell Alert", 
-     "SELL Signal")
+alertcondition(buy_signal, "Buy Alert", "BUY Signal")
+alertcondition(sell_signal, "Sell Alert", "SELL Signal")
 
 // ==================== PANEL ====================
-
 var table info_table = table.new(position.bottom_right, 3, 8, bgcolor=color.new(color.black, 80), border_width=1)
-
 if barstate.islast
-    // Header
     info_table.cell(0, 0, "IND", bgcolor=color.gray, text_color=color.white, text_size=size.small)
     info_table.cell(0, 1, "VAL", bgcolor=color.gray, text_color=color.white, text_size=size.small)
     info_table.cell(0, 2, "STATUS", bgcolor=color.gray, text_color=color.white, text_size=size.small)
-    
-    // HULL
     info_table.cell(1, 0, "HULL", text_color=color.orange, text_size=size.small)
     info_table.cell(1, 1, str.tostring(HULL, "#.##"), text_color=color.white, text_size=size.small)
-    info_table.cell(1, 2, hull_trend_up ? "▲ UP" : "▼ DN", 
-         text_color=hull_trend_up ? color.lime : color.red, text_size=size.small)
-    
-    // UT
+    info_table.cell(1, 2, hull_trend_up ? "UP" : "DN", text_color=hull_trend_up ? color.lime : color.red, text_size=size.small)
     info_table.cell(2, 0, "UT", text_color=color.blue, text_size=size.small)
     info_table.cell(2, 1, str.tostring(ut_stop, "#.##"), text_color=color.white, text_size=size.small)
-    info_table.cell(2, 2, ut_buy ? "▲ BUY" : ut_sell ? "▼ SELL" : "—", 
-         text_color=ut_buy ? color.lime : (ut_sell ? color.red : color.gray), text_size=size.small)
-    
-    // RSI
+    info_table.cell(2, 2, ut_buy ? "BUY" : (ut_sell ? "SELL" : "---"), text_color=ut_buy ? color.lime : (ut_sell ? color.red : color.gray), text_size=size.small)
     info_table.cell(3, 0, "RSI", text_color=color.purple, text_size=size.small)
     info_table.cell(3, 1, str.tostring(rsi, "#.#"), text_color=color.white, text_size=size.small)
-    info_table.cell(3, 2, rsi_oversold ? "OS" : rsi_overbought ? "OB" : "—", 
-         text_color=rsi_oversold ? color.lime : (rsi_overbought ? color.red : color.gray), text_size=size.small)
-    
-    // MACD
+    info_table.cell(3, 2, rsi_oversold ? "OS" : rsi_overbought ? "OB" : "---", text_color=rsi_oversold ? color.lime : (rsi_overbought ? color.red : color.gray), text_size=size.small)
     info_table.cell(4, 0, "MACD", text_color=color.teal, text_size=size.small)
     info_table.cell(4, 1, str.tostring(macd_hist, "#.###"), text_color=color.white, text_size=size.small)
-    info_table.cell(4, 2, macd_bullish ? "▲" : "▼", 
-         text_color=macd_bullish ? color.lime : color.red, text_size=size.small)
-    
-    // ADX
+    info_table.cell(4, 2, macd_bullish ? "UP" : "DN", text_color=macd_bullish ? color.lime : color.red, text_size=size.small)
     info_table.cell(5, 0, "ADX", text_color=color.yellow, text_size=size.small)
     info_table.cell(5, 1, str.tostring(adx_val, "#.#"), text_color=color.white, text_size=size.small)
-    info_table.cell(5, 2, adx_strong ? " Strong" : " Weak", 
-         text_color=adx_strong ? color.lime : color.gray, text_size=size.small)
-    
-    // Confluence
+    info_table.cell(5, 2, adx_strong ? "STR" : "WEAK", text_color=adx_strong ? color.lime : color.gray, text_size=size.small)
     conf_val = buy_signal ? buy_confluence : (sell_signal ? sell_confluence : 0)
     info_table.cell(6, 0, "CONF", bgcolor=color.new(color.blue, 30), text_color=color.white, text_size=size.small)
-    info_table.cell(6, 1, str.tostring(conf_val) + "/5", bgcolor=color.new(color.blue, 30), text_color=color.white, text_size=size.small)
-    info_table.cell(6, 2, buy_signal ? "BUY" : sell_signal ? "SELL" : "WAIT", 
-         bgcolor=buy_signal ? color.lime : (sell_signal ? color.red : color.gray), 
-         text_color=color.black, text_size=size.small)
+    info_table.cell(6, 1, str.tostring(conf_val), bgcolor=color.new(color.blue, 30), text_color=color.white, text_size=size.small)
+    info_table.cell(6, 2, buy_signal ? "BUY" : sell_signal ? "SELL" : "WAIT", bgcolor=buy_signal ? color.lime : (sell_signal ? color.red : color.gray), text_color=color.black, text_size=size.small)
