@@ -1,0 +1,90 @@
+//@version=6
+indicator(title="Hull + TEMA (Real Vertical Width Fix)", overlay=true)
+
+// ======= [1] CONFIGURACIÓN DE PARÁMETROS =======
+src_hull = input.source(close, title="Fuente Hull")
+length = input.int(55, title="Longitud Hull")
+temaLength = input.int(55, title="Longitud TEMA")
+ema_length = input.int(200, title="Longitud EMA Filtro")
+
+// --- ACTIVAR/DESACTIVAR FILTROS ---
+use_adx_filter = input.bool(true, title="Usar Filtro ADX", group="Filtros Generales")
+use_sqz_filter = input.bool(true, title="Usar Filtro Squeeze", group="Filtros Generales")
+use_band_filter = input.bool(true, title="Usar Filtro Ancho de Banda", group="Filtros Generales")
+use_ema_filter = input.bool(true, title="Usar Filtro EMA", group="Filtros Generales")
+
+// --- CONFIGURACIÓN DE FILTROS ---
+adx_threshold = input.int(23, title="Nivel ADX (Key Level)", minval=1, group="Configuración ADX")
+adx_len = input.int(14, title="Longitud ADX", group="Configuración ADX")
+
+// Ancho Máximo Vertical Permitido
+max_band_width = input.float(10.0, title="Ancho Vertical Máximo (Precio)", step=0.1, group="Filtro de Volatilidad")
+
+// ======= [2] LÓGICA HULL SUITE =======
+HMA(_src, _length) => ta.wma(2 * ta.wma(_src, _length / 2) - ta.wma(_src, _length), math.round(math.sqrt(_length)))
+_hull = HMA(src_hull, length)
+
+// Definimos los dos bordes de la banda según tu script original
+// MHULL es la línea actual, SHULL es el desplazamiento visual
+MHULL = _hull
+SHULL = _hull[2] 
+
+// CÁLCULO DEL ANCHO VERTICAL REAL (Borde a Borde en la misma vela)
+vertical_width = math.abs(MHULL - SHULL)
+banda_ok = not use_band_filter or (vertical_width <= max_band_width)
+
+// ======= [3] LÓGICA TEMA =======
+ema1 = ta.ema(close, temaLength)
+ema2 = ta.ema(ema1, temaLength)
+ema3 = ta.ema(ema2, temaLength)
+tema = 3 * (ema1 - ema2) + ema3
+plot(tema, title="TEMA", color=color.aqua, linewidth=2)
+
+// ======= [3.1] LÓGICA EMA 200 (FILTRO DE TENDENCIA) =======
+ema_200 = ta.ema(close, ema_length)
+plot(ema_200, title="EMA 200", color=color.orange, linewidth=2)
+
+// Filtrar según posición del precio respecto a la EMA
+// Usamos open para evitar repintado
+precio_sobre_ema = open > ema_200
+precio_bajo_ema = open < ema_200
+
+// Filtro EMA: solo comprar si precio > EMA, solo vender si precio < EMA
+ema_filtro_ok = not use_ema_filter or (precio_sobre_ema or precio_bajo_ema)
+
+// ======= [4] CONFIRMACIONES (ADX + SQZ) =======
+[plus, minus, adxValue] = ta.dmi(adx_len, adx_len)
+adx_fuerte = not use_adx_filter or (adxValue > adx_threshold and adxValue > adxValue[1])
+
+basis = ta.sma(close, 20)
+dev = 2.0 * ta.stdev(close, 20)
+upperBB = basis + dev
+lowerBB = basis - dev
+maKC = ta.sma(close, 20)
+rangeKC = ta.tr
+smaKC = ta.sma(rangeKC, 20)
+upperKC = maKC + smaKC * 1.5
+lowerKC = maKC - smaKC * 1.5
+sqz_valido = not use_sqz_filter or ((lowerBB < lowerKC) and (upperBB > upperKC))
+
+// ======= [5] LÓGICA DE COLOR Y SEÑALES =======
+tendencia_alcista = _hull > _hull[2] and adx_fuerte and sqz_valido
+tendencia_bajista = _hull < _hull[2] and adx_fuerte and sqz_valido
+
+hullColor = tendencia_alcista ? color.new(#00ff00, 40) : tendencia_bajista ? color.new(#ff0000, 40) : color.new(color.gray, 60)
+
+Fi1 = plot(MHULL, title="MHULL", color=hullColor, linewidth=2)
+Fi2 = plot(SHULL, title="SHULL", color=hullColor, linewidth=2)
+fill(Fi1, Fi2, title="Band Filler", color=hullColor)
+
+// --- GATILLOS CON FILTRO VERTICAL Y EMA ---
+// Compra: precio > EMA (tendencia alcista) y cruza TEMA por encima de MHULL
+long_signal  = ta.crossover(tema, MHULL) and adx_fuerte and banda_ok and ema_filtro_ok and precio_sobre_ema
+// Venta: precio < EMA (tendencia bajista) y cruza TEMA por debajo de MHULL
+short_signal = ta.crossunder(tema, MHULL) and adx_fuerte and banda_ok and ema_filtro_ok and precio_bajo_ema
+
+plotshape(long_signal, style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small, title="Compra Confirmada")
+plotshape(short_signal, style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small, title="Venta Confirmada")
+
+// Monitoreo para ajuste manual
+plot(vertical_width, "Ancho Vertical Real", color=color.new(color.yellow, 100), display=display.data_window)
